@@ -1,0 +1,311 @@
+// Prisma Schema for Azevedo Medical Services
+// Post-Consultation Management System
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============== ENUMS ==============
+
+enum UserRole {
+  ADMIN
+  DOCTOR
+  SECRETARY
+}
+
+enum Gender {
+  M
+  F
+  OTHER
+}
+
+enum TreatmentStatus {
+  ONGOING
+  FINISHED
+  REFUSED
+  EXTERNAL
+  SUSPENDED
+}
+
+enum DoseStatus {
+  PENDING
+  APPLIED
+  NOT_ACCEPTED
+}
+
+enum PaymentStatus {
+  WAITING_PIX
+  WAITING_CARD
+  WAITING_BOLETO
+  PAID
+  WAITING_DELIVERY
+}
+
+enum SurveyStatus {
+  WAITING
+  SENT
+  ANSWERED
+  NOT_SENT
+}
+
+enum ProtocolCategory {
+  MEDICATION
+  MONITORING
+}
+
+enum PurchaseRequestStatus {
+  PENDING
+  ORDERED
+  RECEIVED
+}
+
+// ============== MODELS ==============
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String
+  role      UserRole @default(SECRETARY)
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  consentDocuments ConsentDocument[]
+
+  @@map("users")
+}
+
+model Patient {
+  id            String   @id @default(cuid())
+  fullName      String
+  birthDate     DateTime?
+  gender        Gender?
+  mainDiagnosis String
+  clinicalNotes String?
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  guardian         Guardian?
+  address          Address?
+  treatments       Treatment[]
+  consentDocuments ConsentDocument[]
+  dispenseLogs     DispenseLog[]
+
+  @@map("patients")
+}
+
+model Guardian {
+  id             String  @id @default(cuid())
+  patientId      String  @unique
+  fullName       String
+  phonePrimary   String
+  phoneSecondary String?
+  email          String?
+  relationship   String
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("guardians")
+}
+
+model Address {
+  id           String  @id @default(cuid())
+  patientId    String  @unique
+  street       String
+  number       String
+  complement   String?
+  neighborhood String
+  city         String
+  state        String
+  zipCode      String
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("addresses")
+}
+
+model Diagnosis {
+  id    String  @id @default(cuid())
+  name  String  @unique
+  color String?
+
+  @@map("diagnoses")
+}
+
+model MedicationBase {
+  id                 String  @id @default(cuid())
+  activeIngredient   String
+  dosage             String
+  tradeName          String?
+  manufacturer       String?
+  pharmaceuticalForm String?
+
+  @@unique([activeIngredient, dosage])
+  @@map("medication_bases")
+}
+
+model Protocol {
+  id             String           @id @default(cuid())
+  name           String           @unique
+  category       ProtocolCategory
+  medicationType String?
+  frequencyDays  Int
+  goal           String?
+  message        String?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  // Relations
+  milestones ProtocolMilestone[]
+  treatments Treatment[]
+
+  @@map("protocols")
+}
+
+model ProtocolMilestone {
+  id         String @id @default(cuid())
+  protocolId String
+  day        Int
+  message    String
+
+  // Relations
+  protocol Protocol @relation(fields: [protocolId], references: [id], onDelete: Cascade)
+
+  @@unique([protocolId, day])
+  @@map("protocol_milestones")
+}
+
+model Treatment {
+  id                       String          @id @default(cuid())
+  patientId                String
+  protocolId               String
+  status                   TreatmentStatus @default(ONGOING)
+  startDate                DateTime
+  nextConsultationDate     DateTime?
+  observations             String?
+  plannedDosesBeforeConsult Int            @default(0)
+  createdAt                DateTime        @default(now())
+  updatedAt                DateTime        @updatedAt
+
+  // Relations
+  patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  protocol Protocol @relation(fields: [protocolId], references: [id])
+  doses    Dose[]
+
+  @@map("treatments")
+}
+
+model Dose {
+  id                   String        @id @default(cuid())
+  treatmentId          String
+  cycleNumber          Int
+  applicationDate      DateTime
+  lotNumber            String
+  expiryDate           DateTime
+  status               DoseStatus    @default(PENDING)
+  calculatedNextDate   DateTime?
+  daysUntilNext        Int?
+  isLastBeforeConsult  Boolean       @default(false)
+  consultationDate     DateTime?
+  paymentStatus        PaymentStatus @default(WAITING_PIX)
+  paymentUpdatedAt     DateTime      @default(now())
+  nurse                Boolean       @default(false)
+  surveyStatus         SurveyStatus  @default(NOT_SENT)
+  surveyScore          Int?
+  surveyComment        String?
+  inventoryLotId       String?
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
+
+  // Relations
+  treatment     Treatment      @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
+  inventoryItem InventoryItem? @relation(fields: [inventoryLotId], references: [id])
+  dispenseLogs  DispenseLog[]
+
+  @@map("doses")
+}
+
+model InventoryItem {
+  id             String   @id @default(cuid())
+  medicationName String
+  lotNumber      String
+  expiryDate     DateTime
+  quantity       Int
+  unit           String   @default("Ampola")
+  entryDate      DateTime @default(now())
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  // Relations
+  doses        Dose[]
+  dispenseLogs DispenseLog[]
+
+  @@unique([medicationName, lotNumber])
+  @@map("inventory_items")
+}
+
+model DispenseLog {
+  id              String   @id @default(cuid())
+  date            DateTime @default(now())
+  patientId       String
+  inventoryItemId String
+  medicationName  String
+  quantity        Int      @default(1)
+  doseId          String?
+
+  // Relations
+  patient       Patient       @relation(fields: [patientId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  dose          Dose?         @relation(fields: [doseId], references: [id])
+
+  @@map("dispense_logs")
+}
+
+model PurchaseRequest {
+  id                        String                @id @default(cuid())
+  medicationName            String
+  predictedConsumption10Days Int
+  currentStock              Int
+  suggestedQuantity         Int?
+  status                    PurchaseRequestStatus @default(PENDING)
+  createdAt                 DateTime              @default(now())
+  updatedAt                 DateTime              @updatedAt
+
+  @@map("purchase_requests")
+}
+
+model ConsentDocument {
+  id         String   @id @default(cuid())
+  patientId  String
+  fileName   String
+  fileType   String
+  fileUrl    String
+  uploadedBy String
+  uploadDate DateTime @default(now())
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [uploadedBy], references: [id])
+
+  @@map("consent_documents")
+}
+
+model DismissedLog {
+  id          String   @id @default(cuid())
+  contactId   String   @unique
+  dismissedAt DateTime @default(now())
+
+  @@map("dismissed_logs")
+}
