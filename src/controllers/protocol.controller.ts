@@ -55,22 +55,46 @@ export const createProtocol = async (req: Request, res: Response, next: NextFunc
   try {
     const { name, category, medicationType, frequencyDays, goal, message, milestones } = req.body;
 
-    if (!name || !category || !frequencyDays) {
-      throw new BadRequestError('Name, category, and frequency are required');
+    // Validate required fields
+    if (!name || !name.trim()) {
+      throw new BadRequestError('Nome do protocolo é obrigatório');
+    }
+
+    if (!category) {
+      throw new BadRequestError('Categoria é obrigatória');
+    }
+
+    // Validate category enum
+    const validCategories = ['MEDICATION', 'MONITORING'];
+    if (!validCategories.includes(category)) {
+      throw new BadRequestError('Categoria inválida. Use MEDICATION ou MONITORING');
+    }
+
+    if (!frequencyDays || frequencyDays < 1) {
+      throw new BadRequestError('Frequência (dias) é obrigatória e deve ser maior que 0');
+    }
+
+    // Check for duplicate name
+    const existingProtocol = await prisma.protocol.findUnique({
+      where: { name: name.trim() },
+    });
+
+    if (existingProtocol) {
+      throw new BadRequestError('Já existe um protocolo com este nome');
     }
 
     const protocol = await prisma.protocol.create({
       data: {
-        name,
+        name: name.trim(),
         category,
-        medicationType,
-        frequencyDays,
-        goal,
-        message,
+        medicationType: medicationType || null,
+        frequencyDays: Number(frequencyDays),
+        goal: goal || null,
+        message: message || null,
         ...(milestones && milestones.length > 0 && {
           milestones: {
             create: milestones.map((m: { day: number; message: string }) => ({
-              day: m.day,
+              day: Number(m.day),
               message: m.message,
             })),
           },
@@ -94,6 +118,33 @@ export const updateProtocol = async (req: Request, res: Response, next: NextFunc
     const { id } = req.params;
     const { name, category, medicationType, frequencyDays, goal, message, milestones } = req.body;
 
+    // Validate category if provided
+    if (category) {
+      const validCategories = ['MEDICATION', 'MONITORING'];
+      if (!validCategories.includes(category)) {
+        throw new BadRequestError('Categoria inválida. Use MEDICATION ou MONITORING');
+      }
+    }
+
+    // Validate frequencyDays if provided
+    if (frequencyDays !== undefined && frequencyDays < 1) {
+      throw new BadRequestError('Frequência (dias) deve ser maior que 0');
+    }
+
+    // Check for duplicate name if name is being changed
+    if (name && name.trim()) {
+      const existingProtocol = await prisma.protocol.findFirst({
+        where: {
+          name: name.trim(),
+          id: { not: id },
+        },
+      });
+
+      if (existingProtocol) {
+        throw new BadRequestError('Já existe um protocolo com este nome');
+      }
+    }
+
     // If milestones are provided, delete existing and create new ones
     if (milestones !== undefined) {
       await prisma.protocolMilestone.deleteMany({
@@ -104,16 +155,16 @@ export const updateProtocol = async (req: Request, res: Response, next: NextFunc
     const protocol = await prisma.protocol.update({
       where: { id },
       data: {
-        ...(name && { name }),
+        ...(name && { name: name.trim() }),
         ...(category && { category }),
-        ...(medicationType !== undefined && { medicationType }),
-        ...(frequencyDays && { frequencyDays }),
-        ...(goal !== undefined && { goal }),
-        ...(message !== undefined && { message }),
+        ...(medicationType !== undefined && { medicationType: medicationType || null }),
+        ...(frequencyDays && { frequencyDays: Number(frequencyDays) }),
+        ...(goal !== undefined && { goal: goal || null }),
+        ...(message !== undefined && { message: message || null }),
         ...(milestones && {
           milestones: {
             create: milestones.map((m: { day: number; message: string }) => ({
-              day: m.day,
+              day: Number(m.day),
               message: m.message,
             })),
           },
