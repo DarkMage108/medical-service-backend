@@ -244,3 +244,32 @@ export const getActivityWindow = async (req: Request, res: Response, next: NextF
     next(error);
   }
 };
+
+export const getAllDismissedLogs = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const dismissedLogs = await prisma.dismissedLog.findMany({
+      orderBy: { dismissedAt: 'desc' },
+    });
+
+    sendSuccess(res, { data: dismissedLogs });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getAllDocuments = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const documents = await prisma.consentDocument.findMany({
+      include: {
+        patient: {
+          select: { id: true, fullName: true },
+        },
+      },
+      orderBy: { uploadDate: 'desc' },
+    });
+
+    sendSuccess(res, { data: documents });
+  } catch (error) {
+    next(error);
+  }
+};
