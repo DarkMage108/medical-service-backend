@@ -22,6 +22,7 @@ import inventoryRoutes from './routes/inventory.routes.js';
 import purchaseRequestRoutes from './routes/purchaseRequest.routes.js';
 import dashboardRoutes from './routes/dashboard.routes.js';
 import dispenseLogRoutes from './routes/dispenseLog.routes.js';
+import permissionRoutes from './routes/permission.routes.js';
 
 dotenv.config();
 
@@ -85,6 +86,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/purchase-requests', purchaseRequestRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/dispense-logs', dispenseLogRoutes);
+app.use('/api/permissions', permissionRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

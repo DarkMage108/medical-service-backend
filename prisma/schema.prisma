@@ -309,3 +309,15 @@ model DismissedLog {
 
   @@map("dismissed_logs")
 }
+
+model RolePermission {
+  id        String   @id @default(cuid())
+  role      UserRole
+  menuKey   String   // Unique key for menu item (e.g., 'dashboard', 'patients', 'inventory')
+  canAccess Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([role, menuKey])
+  @@map("role_permissions")
+}
