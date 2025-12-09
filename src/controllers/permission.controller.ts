@@ -7,6 +7,7 @@ import { BadRequestError, NotFoundError } from '../utils/errors.js';
 export const MENU_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'patients', label: 'Pacientes', path: '/pacientes' },
+  { key: 'checklist', label: 'Checklist', path: '/checklist' },
   { key: 'history', label: 'Histórico', path: '/historico' },
   { key: 'inventory', label: 'Estoque', path: '/estoque' },
   { key: 'diagnoses', label: 'Diagnósticos', path: '/diagnosticos' },
@@ -18,6 +19,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
   [UserRole.ADMIN]: {
     dashboard: true,
     patients: true,
+    checklist: true,
     history: true,
     inventory: true,
     diagnoses: true,
@@ -26,6 +28,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
   [UserRole.DOCTOR]: {
     dashboard: true,
     patients: true,
+    checklist: true,
     history: true,
     inventory: true,
     diagnoses: true,
@@ -34,6 +37,7 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
   [UserRole.SECRETARY]: {
     dashboard: true,
     patients: true,
+    checklist: true,
     history: true,
     inventory: false,
     diagnoses: false,
