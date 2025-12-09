@@ -136,9 +136,10 @@ model Address {
 }
 
 model Diagnosis {
-  id    String  @id @default(cuid())
-  name  String  @unique
-  color String?
+  id              String  @id @default(cuid())
+  name            String  @unique
+  color           String?
+  requiresConsent Boolean @default(false)
 
   @@map("diagnoses")
 }

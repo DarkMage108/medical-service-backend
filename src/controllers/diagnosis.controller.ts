@@ -35,7 +35,7 @@ export const getDiagnosis = async (req: Request, res: Response, next: NextFuncti
 
 export const createDiagnosis = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, color } = req.body;
+    const { name, color, requiresConsent } = req.body;
 
     if (!name) {
       throw new BadRequestError('Name is required');
@@ -45,6 +45,7 @@ export const createDiagnosis = async (req: Request, res: Response, next: NextFun
       data: {
         name,
         color,
+        requiresConsent: requiresConsent ?? false,
       },
     });
 
@@ -57,13 +58,14 @@ export const createDiagnosis = async (req: Request, res: Response, next: NextFun
 export const updateDiagnosis = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name, color } = req.body;
+    const { name, color, requiresConsent } = req.body;
 
     const diagnosis = await prisma.diagnosis.update({
       where: { id },
       data: {
         ...(name && { name }),
         ...(color !== undefined && { color }),
+        ...(requiresConsent !== undefined && { requiresConsent }),
       },
     });
 
