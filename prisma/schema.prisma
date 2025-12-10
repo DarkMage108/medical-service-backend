@@ -110,7 +110,7 @@ model Guardian {
   phonePrimary   String
   phoneSecondary String?
   email          String?
-  relationship   String
+  relationship   String?
 
   // Relations
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)

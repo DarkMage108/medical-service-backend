@@ -118,21 +118,25 @@ export const createPatient = async (req: Request, res: Response, next: NextFunct
       throw new BadRequestError('Guardian name and phone are required');
     }
 
+    // Validate gender enum if provided
+    const validGenders = ['M', 'F', 'OTHER'];
+    const validGender = gender && validGenders.includes(gender) ? gender : null;
+
     const patient = await prisma.patient.create({
       data: {
         fullName,
         birthDate: birthDate ? new Date(birthDate) : null,
-        gender,
+        gender: validGender,
         mainDiagnosis,
-        clinicalNotes,
+        clinicalNotes: clinicalNotes || null,
         active: true,
         guardian: {
           create: {
             fullName: guardian.fullName,
             phonePrimary: guardian.phonePrimary.replace(/\D/g, ''),
-            phoneSecondary: guardian.phoneSecondary?.replace(/\D/g, ''),
-            email: guardian.email,
-            relationship: guardian.relationship,
+            phoneSecondary: guardian.phoneSecondary?.replace(/\D/g, '') || null,
+            email: guardian.email || null,
+            relationship: guardian.relationship || null,
           },
         },
         ...(address && address.street && {
