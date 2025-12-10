@@ -214,7 +214,7 @@ export const recalculatePatientStatus = async (req: Request, res: Response, next
     });
 
     const isActive = treatments.some(
-      (t) => t.status === 'ONGOING' || t.status === 'EXTERNAL'
+      (t: { status: string }) => t.status === 'ONGOING' || t.status === 'EXTERNAL'
     );
 
     const patient = await prisma.patient.update({

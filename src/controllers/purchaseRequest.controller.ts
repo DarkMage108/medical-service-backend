@@ -44,7 +44,7 @@ export const checkPurchaseTriggers = async (req: Request, res: Response, next: N
     // Calculate demand per medication
     const demandMap: Record<string, number> = {};
 
-    activeTreatments.forEach((treatment) => {
+    activeTreatments.forEach((treatment: any) => {
       if (!treatment.protocol.medicationType) return;
 
       const lastDose = treatment.doses[0];
@@ -74,7 +74,7 @@ export const checkPurchaseTriggers = async (req: Request, res: Response, next: N
     });
 
     const stockMap: Record<string, number> = {};
-    inventory.forEach((item) => {
+    inventory.forEach((item: any) => {
       stockMap[item.medicationName] = (stockMap[item.medicationName] || 0) + item.quantity;
     });
 
@@ -83,7 +83,7 @@ export const checkPurchaseTriggers = async (req: Request, res: Response, next: N
       where: { status: 'PENDING' },
     });
 
-    const existingMedications = new Set(existingRequests.map((r) => r.medicationName));
+    const existingMedications = new Set(existingRequests.map((r: any) => r.medicationName));
 
     // Create new requests where needed
     const created: any[] = [];

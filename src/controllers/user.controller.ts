@@ -3,7 +3,6 @@ import bcrypt from 'bcryptjs';
 import prisma from '../utils/prisma.js';
 import { NotFoundError, BadRequestError } from '../utils/errors.js';
 import { sendSuccess, sendPaginated, sendNoContent } from '../utils/response.js';
-import { UserRole } from '@prisma/client';
 
 export const getUsers = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -16,7 +15,7 @@ export const getUsers = async (req: Request, res: Response, next: NextFunction) 
     const where: any = {};
 
     if (role) {
-      where.role = role as UserRole;
+      where.role = role as string;
     }
 
     if (active !== undefined) {

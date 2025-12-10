@@ -211,7 +211,7 @@ export const updateTreatment = async (req: Request, res: Response, next: NextFun
       });
 
       const isPatientActive = allTreatments.some(
-        (t) => t.status === 'ONGOING' || t.status === 'EXTERNAL'
+        (t: { status: string }) => t.status === 'ONGOING' || t.status === 'EXTERNAL'
       );
 
       await prisma.patient.update({
@@ -250,7 +250,7 @@ export const deleteTreatment = async (req: Request, res: Response, next: NextFun
     });
 
     const isPatientActive = remainingTreatments.some(
-      (t) => t.status === 'ONGOING' || t.status === 'EXTERNAL'
+      (t: { status: string }) => t.status === 'ONGOING' || t.status === 'EXTERNAL'
     );
 
     await prisma.patient.update({

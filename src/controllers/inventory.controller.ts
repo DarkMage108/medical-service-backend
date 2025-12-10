@@ -29,7 +29,7 @@ export const getInventory = async (req: Request, res: Response, next: NextFuncti
 
     if (grouped === 'true') {
       // Group by medication name
-      const grouped = items.reduce((acc: any, item) => {
+      const grouped = items.reduce((acc: any, item: any) => {
         if (!acc[item.medicationName]) {
           acc[item.medicationName] = {
             medicationName: item.medicationName,

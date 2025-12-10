@@ -1,6 +1,11 @@
 import { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/errors.js';
-import { Prisma } from '@prisma/client';
+
+// Define error interface for Prisma-like errors
+interface PrismaError extends Error {
+  code?: string;
+  meta?: { target?: string[] };
+}
 
 export const errorHandler = (
   err: Error,
@@ -18,14 +23,15 @@ export const errorHandler = (
     });
   }
 
-  // Prisma errors
-  if (err instanceof Prisma.PrismaClientKnownRequestError) {
-    switch (err.code) {
+  // Prisma errors (check by name since we can't import Prisma types)
+  const prismaErr = err as PrismaError;
+  if (err.name === 'PrismaClientKnownRequestError' && prismaErr.code) {
+    switch (prismaErr.code) {
       case 'P2002':
         return res.status(409).json({
           error: 'Conflict',
           message: 'A record with this value already exists',
-          field: (err.meta?.target as string[])?.join(', '),
+          field: prismaErr.meta?.target?.join(', '),
         });
       case 'P2025':
         return res.status(404).json({
@@ -45,7 +51,7 @@ export const errorHandler = (
     }
   }
 
-  if (err instanceof Prisma.PrismaClientValidationError) {
+  if (err.name === 'PrismaClientValidationError') {
     return res.status(400).json({
       error: 'Validation Error',
       message: 'Invalid data provided',

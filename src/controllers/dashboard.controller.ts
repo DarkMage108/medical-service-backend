@@ -64,10 +64,10 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
     ]);
 
     // Calculate NPS
-    const validScores = surveyScores.filter((s) => s.surveyScore !== null && s.surveyScore > 0);
+    const validScores = surveyScores.filter((s: { surveyScore: number | null }) => s.surveyScore !== null && s.surveyScore > 0);
     const npsScore =
       validScores.length > 0
-        ? validScores.reduce((sum, s) => sum + (s.surveyScore || 0), 0) / validScores.length
+        ? validScores.reduce((sum: number, s: { surveyScore: number | null }) => sum + (s.surveyScore || 0), 0) / validScores.length
         : 0;
 
     sendSuccess(res, {
@@ -125,13 +125,13 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
 
     // Get dismissed logs
     const dismissedLogs = await prisma.dismissedLog.findMany();
-    const dismissedSet = new Set(dismissedLogs.map((d) => d.contactId));
+    const dismissedSet = new Set(dismissedLogs.map((d: { contactId: string }) => d.contactId));
 
     // Calculate upcoming contacts
     const contacts: any[] = [];
 
-    treatments.forEach((treatment) => {
-      treatment.protocol.milestones.forEach((milestone) => {
+    treatments.forEach((treatment: any) => {
+      treatment.protocol.milestones.forEach((milestone: any) => {
         const contactDate = new Date(treatment.startDate);
         contactDate.setDate(contactDate.getDate() + milestone.day);
 
@@ -225,7 +225,7 @@ export const getActivityWindow = async (req: Request, res: Response, next: NextF
       orderBy: { applicationDate: 'asc' },
     });
 
-    const data = doses.map((dose) => ({
+    const data = doses.map((dose: any) => ({
       id: dose.id,
       patientId: dose.treatment.patient.id,
       patientName: dose.treatment.patient.fullName,

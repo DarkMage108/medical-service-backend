@@ -55,7 +55,7 @@ export const getDispenseReport = async (req: Request, res: Response, next: NextF
     // Group by medication and period
     const report: Record<string, { medicationName: string; periods: Record<string, number>; total: number }> = {};
 
-    logs.forEach((log) => {
+    logs.forEach((log: any) => {
       const date = new Date(log.date);
       let periodKey: string;
 

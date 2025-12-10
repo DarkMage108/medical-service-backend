@@ -1,7 +1,13 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma.js';
-import { UserRole } from '@prisma/client';
 import { BadRequestError, NotFoundError } from '../utils/errors.js';
+
+// Define UserRole enum locally to avoid Prisma client generation issues
+enum UserRole {
+  ADMIN = 'ADMIN',
+  DOCTOR = 'DOCTOR',
+  SECRETARY = 'SECRETARY',
+}
 
 // Define available menu items with their default permissions per role
 export const MENU_ITEMS = [
@@ -121,10 +127,10 @@ export const getMyPermissions = async (
   next: NextFunction
 ) => {
   try {
-    const userRole = req.user!.role;
+    const userRole = req.user!.role as UserRole;
 
     const permissions = await prisma.rolePermission.findMany({
-      where: { role: userRole },
+      where: { role: userRole as any },
     });
 
     // Start with default permissions and override with stored ones

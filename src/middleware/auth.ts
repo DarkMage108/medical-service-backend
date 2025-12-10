@@ -2,12 +2,18 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { UnauthorizedError, ForbiddenError } from '../utils/errors.js';
 import prisma from '../utils/prisma.js';
-import { UserRole } from '@prisma/client';
+
+// Define UserRole enum locally to avoid Prisma client generation issues
+enum UserRole {
+  ADMIN = 'ADMIN',
+  DOCTOR = 'DOCTOR',
+  SECRETARY = 'SECRETARY',
+}
 
 interface JwtPayload {
   userId: string;
   email: string;
-  role: UserRole;
+  role: string;
 }
 
 declare global {
@@ -16,7 +22,7 @@ declare global {
       user?: {
         id: string;
         email: string;
-        role: UserRole;
+        role: string;
       };
     }
   }
@@ -69,7 +75,7 @@ export const authenticate = async (
   }
 };
 
-export const authorize = (...allowedRoles: UserRole[]) => {
+export const authorize = (...allowedRoles: string[]) => {
   return (req: Request, _res: Response, next: NextFunction) => {
     if (!req.user) {
       return next(new UnauthorizedError('Not authenticated'));
