@@ -49,6 +49,16 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
               state: true,
             },
           },
+          treatments: {
+            where: { status: 'ONGOING' },
+            include: {
+              protocol: { select: { frequencyDays: true } },
+              doses: {
+                orderBy: { applicationDate: 'asc' },
+                select: { status: true, applicationDate: true },
+              },
+            },
+          },
         },
         skip,
         take: limitNum,
@@ -57,7 +67,80 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       prisma.patient.count({ where }),
     ]);
 
-    sendPaginated(res, patients, {
+    // Calculate adherence level for each patient
+    const today = new Date();
+    const patientsWithAdherence = patients.map((patient: any) => {
+      let adherenceLevel: string | null = null;
+
+      if (patient.treatments && patient.treatments.length > 0) {
+        // Aggregate metrics across all treatments
+        let totalMissed = 0;
+        let totalSignificantDelays = 0;
+        let maxDaysSinceLast = 0;
+        let hasOngoingTreatment = false;
+
+        patient.treatments.forEach((treatment: any) => {
+          if (treatment.status === 'ONGOING') {
+            hasOngoingTreatment = true;
+            const doses = treatment.doses || [];
+            const frequencyDays = treatment.protocol?.frequencyDays || 28;
+
+            let lastApplicationDate: Date | null = null;
+
+            doses.forEach((dose: any, index: number) => {
+              if (dose.status === 'NOT_ACCEPTED') {
+                totalMissed++;
+              }
+
+              if (dose.status === 'APPLIED' && index > 0) {
+                const prevDose = doses[index - 1];
+                if (prevDose.status === 'APPLIED') {
+                  const prevDate = new Date(prevDose.applicationDate);
+                  const expectedDate = new Date(prevDate);
+                  expectedDate.setDate(expectedDate.getDate() + frequencyDays);
+                  const actualDate = new Date(dose.applicationDate);
+                  const delayDays = Math.max(0, Math.floor((actualDate.getTime() - expectedDate.getTime()) / (1000 * 60 * 60 * 24)));
+                  if (delayDays > 3) {
+                    totalSignificantDelays++;
+                  }
+                }
+              }
+
+              if (dose.status === 'APPLIED') {
+                lastApplicationDate = new Date(dose.applicationDate);
+              }
+            });
+
+            if (lastApplicationDate !== null) {
+              const lastDate = lastApplicationDate as Date;
+              const daysSinceLast = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysSinceLast > maxDaysSinceLast) {
+                maxDaysSinceLast = daysSinceLast;
+              }
+            }
+          }
+        });
+
+        // Classify adherence
+        if (hasOngoingTreatment) {
+          if (maxDaysSinceLast > 30) {
+            adherenceLevel = 'ABANDONO';
+          } else if (totalMissed > 3 || totalSignificantDelays > 3) {
+            adherenceLevel = 'BAIXA';
+          } else if (totalSignificantDelays > 0 || totalMissed > 0) {
+            adherenceLevel = 'MODERADA';
+          } else {
+            adherenceLevel = 'BOA';
+          }
+        }
+      }
+
+      // Remove treatments from response to keep it lean
+      const { treatments, ...patientData } = patient;
+      return { ...patientData, adherenceLevel };
+    });
+
+    sendPaginated(res, patientsWithAdherence, {
       total,
       page: pageNum,
       limit: limitNum,
