@@ -114,8 +114,8 @@ export const createPatient = async (req: Request, res: Response, next: NextFunct
       throw new BadRequestError('Full name and main diagnosis are required');
     }
 
-    if (!guardian || !guardian.fullName || !guardian.phonePrimary || !guardian.relationship) {
-      throw new BadRequestError('Guardian information is required');
+    if (!guardian || !guardian.fullName || !guardian.phonePrimary) {
+      throw new BadRequestError('Guardian name and phone are required');
     }
 
     const patient = await prisma.patient.create({
