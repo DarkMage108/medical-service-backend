@@ -3,20 +3,18 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Helper function to add days to a date
 function addDays(date: Date, days: number): Date {
   const result = new Date(date);
   result.setDate(result.getDate() + days);
   return result;
 }
 
-// Helper function to subtract days from a date
 function subtractDays(date: Date, days: number): Date {
   return addDays(date, -days);
 }
 
 async function main() {
-  console.log('Seeding database with full test data...');
+  console.log('Seeding database with diverse test data...');
 
   const TODAY = new Date();
 
@@ -34,7 +32,6 @@ async function main() {
       role: UserRole.ADMIN,
     },
   });
-  console.log('Created admin:', admin.email);
 
   const doctorPassword = await bcrypt.hash('doctor123', 12);
   const doctor = await prisma.user.upsert({
@@ -47,7 +44,6 @@ async function main() {
       role: UserRole.DOCTOR,
     },
   });
-  console.log('Created doctor:', doctor.email);
 
   const secretaryPassword = await bcrypt.hash('secretary123', 12);
   const secretary = await prisma.user.upsert({
@@ -60,7 +56,8 @@ async function main() {
       role: UserRole.SECRETARY,
     },
   });
-  console.log('Created secretary:', secretary.email);
+
+  console.log('Created 3 users (admin, doctor, secretary)');
 
   // ============== DIAGNOSES ==============
   console.log('\n--- Creating Diagnoses ---');
@@ -180,7 +177,6 @@ async function main() {
   for (const protocol of protocolsData) {
     const { milestones, ...protocolData } = protocol;
 
-    // Delete existing milestones if protocol exists
     const existingProtocol = await prisma.protocol.findUnique({ where: { name: protocol.name } });
     if (existingProtocol) {
       await prisma.protocolMilestone.deleteMany({ where: { protocolId: existingProtocol.id } });
@@ -195,7 +191,6 @@ async function main() {
       },
     });
 
-    // Create milestones if they were deleted
     if (existingProtocol) {
       for (const milestone of milestones) {
         await prisma.protocolMilestone.create({
@@ -232,19 +227,20 @@ async function main() {
   console.log('Created', inventoryItems.length, 'inventory items');
 
   // ============== PATIENTS ==============
-  console.log('\n--- Creating Patients with Full Data ---');
+  // Covering: All genders, all diagnoses, active/inactive, with/without guardian, different cities
+  console.log('\n--- Creating Patients ---');
 
-  // Patient 1: Maria Silva - Active with ONGOING treatment, has pending doses and completed events
+  // Patient 1: Female, Puberdade Precoce, Active, Full data, São Paulo
   const patient1 = await prisma.patient.upsert({
-    where: { id: 'patient-maria-silva' },
+    where: { id: 'patient-001' },
     update: {},
     create: {
-      id: 'patient-maria-silva',
+      id: 'patient-001',
       fullName: 'Maria Silva Santos',
       birthDate: new Date('2015-03-15'),
       gender: Gender.F,
       mainDiagnosis: 'Puberdade Precoce',
-      clinicalNotes: 'Paciente em acompanhamento desde janeiro de 2024. Boa evolucao clinica. Exames de controle normais.',
+      clinicalNotes: 'Paciente em acompanhamento. Boa evolucao clinica.',
       active: true,
       guardian: {
         create: {
@@ -269,118 +265,117 @@ async function main() {
     },
   });
 
-  // Patient 2: Joao Pedro - Active with ONGOING treatment, has timeline events
+  // Patient 2: Male, Baixa Estatura, Active, Full data, Rio de Janeiro
   const patient2 = await prisma.patient.upsert({
-    where: { id: 'patient-joao-pedro' },
+    where: { id: 'patient-002' },
     update: {},
     create: {
-      id: 'patient-joao-pedro',
+      id: 'patient-002',
       fullName: 'Joao Pedro Oliveira',
       birthDate: new Date('2014-08-22'),
       gender: Gender.M,
       mainDiagnosis: 'Baixa Estatura',
-      clinicalNotes: 'Iniciou tratamento com GH em setembro de 2024. Ganho de 2cm nos primeiros 3 meses.',
+      clinicalNotes: 'Iniciou tratamento com GH. Ganho de 2cm nos primeiros 3 meses.',
       active: true,
       guardian: {
         create: {
           fullName: 'Carlos Roberto Oliveira',
-          phonePrimary: '11988776655',
+          phonePrimary: '21988776655',
           email: 'carlos.oliveira@email.com',
           relationship: 'Pai',
         },
       },
       address: {
         create: {
-          street: 'Avenida Brasil',
+          street: 'Avenida Atlantica',
           number: '456',
-          neighborhood: 'Jardim America',
-          city: 'Sao Paulo',
-          state: 'SP',
-          zipCode: '01430001',
+          neighborhood: 'Copacabana',
+          city: 'Rio de Janeiro',
+          state: 'RJ',
+          zipCode: '22070000',
         },
       },
     },
   });
 
-  // Patient 3: Ana Carolina - Active with treatment, pending payment
+  // Patient 3: Female, Hipotireoidismo, Active, Full data, Belo Horizonte
   const patient3 = await prisma.patient.upsert({
-    where: { id: 'patient-ana-carolina' },
+    where: { id: 'patient-003' },
     update: {},
     create: {
-      id: 'patient-ana-carolina',
+      id: 'patient-003',
       fullName: 'Ana Carolina Mendes',
       birthDate: new Date('2016-11-10'),
       gender: Gender.F,
-      mainDiagnosis: 'Puberdade Precoce',
-      clinicalNotes: 'Segunda consulta realizada. Aguardando inicio do tratamento.',
+      mainDiagnosis: 'Hipotireoidismo',
+      clinicalNotes: 'Controle com Levotiroxina. TSH normalizado.',
       active: true,
       guardian: {
         create: {
           fullName: 'Patricia Mendes',
-          phonePrimary: '11977665544',
+          phonePrimary: '31977665544',
           email: 'patricia.mendes@email.com',
           relationship: 'Mae',
         },
       },
       address: {
         create: {
-          street: 'Rua Augusta',
+          street: 'Rua da Bahia',
           number: '789',
-          complement: 'Sala 12',
-          neighborhood: 'Consolacao',
-          city: 'Sao Paulo',
-          state: 'SP',
-          zipCode: '01305000',
+          neighborhood: 'Funcionarios',
+          city: 'Belo Horizonte',
+          state: 'MG',
+          zipCode: '30160010',
         },
       },
     },
   });
 
-  // Patient 4: Lucas Ferreira - Active with trimestral protocol
+  // Patient 4: Male, Diabetes Tipo 1, Active, Full data, Curitiba
   const patient4 = await prisma.patient.upsert({
-    where: { id: 'patient-lucas-ferreira' },
+    where: { id: 'patient-004' },
     update: {},
     create: {
-      id: 'patient-lucas-ferreira',
+      id: 'patient-004',
       fullName: 'Lucas Ferreira Costa',
       birthDate: new Date('2013-05-20'),
       gender: Gender.M,
-      mainDiagnosis: 'Puberdade Precoce',
-      clinicalNotes: 'Paciente masculino com puberdade precoce central. Bom controle com medicacao trimestral.',
+      mainDiagnosis: 'Diabetes Tipo 1',
+      clinicalNotes: 'Controle glicemico adequado com insulina.',
       active: true,
       guardian: {
         create: {
           fullName: 'Fernanda Costa Ferreira',
-          phonePrimary: '11966554433',
-          phoneSecondary: '11955443322',
+          phonePrimary: '41966554433',
+          phoneSecondary: '41955443322',
           email: 'fernanda.costa@email.com',
           relationship: 'Mae',
         },
       },
       address: {
         create: {
-          street: 'Rua Oscar Freire',
+          street: 'Rua XV de Novembro',
           number: '321',
-          neighborhood: 'Pinheiros',
-          city: 'Sao Paulo',
-          state: 'SP',
-          zipCode: '05409010',
+          neighborhood: 'Centro',
+          city: 'Curitiba',
+          state: 'PR',
+          zipCode: '80020310',
         },
       },
     },
   });
 
-  // Patient 5: Isabella - Inactive patient (treatment finished)
+  // Patient 5: Female, Puberdade Precoce, Inactive (FINISHED), Full data
   const patient5 = await prisma.patient.upsert({
-    where: { id: 'patient-isabella-santos' },
+    where: { id: 'patient-005' },
     update: {},
     create: {
-      id: 'patient-isabella-santos',
+      id: 'patient-005',
       fullName: 'Isabella Santos Lima',
       birthDate: new Date('2012-01-30'),
       gender: Gender.F,
       mainDiagnosis: 'Puberdade Precoce',
-      clinicalNotes: 'Tratamento concluido com sucesso em outubro de 2024. Alta do acompanhamento.',
+      clinicalNotes: 'Tratamento concluido com sucesso. Alta do acompanhamento.',
       active: false,
       guardian: {
         create: {
@@ -403,111 +398,308 @@ async function main() {
     },
   });
 
-  // Patient 6: Gabriel - New patient, incomplete registration
+  // Patient 6: Male, Deficiencia de GH, Active, NO guardian/address (incomplete)
   const patient6 = await prisma.patient.upsert({
-    where: { id: 'patient-gabriel-souza' },
+    where: { id: 'patient-006' },
     update: {},
     create: {
-      id: 'patient-gabriel-souza',
+      id: 'patient-006',
       fullName: 'Gabriel Souza',
       birthDate: new Date('2017-07-14'),
       gender: Gender.M,
       mainDiagnosis: 'Deficiencia de GH',
       clinicalNotes: 'Paciente novo. Aguardando exames complementares.',
       active: true,
-      // No guardian or address - incomplete registration
     },
   });
 
-  console.log('Created 6 patients');
-
-  // ============== TREATMENTS ==============
-  console.log('\n--- Creating Treatments ---');
-
-  // Treatment 1: Maria Silva - Mensal protocol with multiple doses
-  const treatment1 = await prisma.treatment.upsert({
-    where: { id: 'treatment-maria-1' },
+  // Patient 7: OTHER gender, Obesidade Infantil, Active, Full data, Salvador
+  const patient7 = await prisma.patient.upsert({
+    where: { id: 'patient-007' },
     update: {},
     create: {
-      id: 'treatment-maria-1',
+      id: 'patient-007',
+      fullName: 'Alex Ribeiro',
+      birthDate: new Date('2015-09-05'),
+      gender: Gender.OTHER,
+      mainDiagnosis: 'Obesidade Infantil',
+      clinicalNotes: 'Acompanhamento nutricional e endocrinologico.',
+      active: true,
+      guardian: {
+        create: {
+          fullName: 'Mariana Ribeiro',
+          phonePrimary: '71988112233',
+          email: 'mariana.ribeiro@email.com',
+          relationship: 'Mae',
+        },
+      },
+      address: {
+        create: {
+          street: 'Avenida Sete de Setembro',
+          number: '100',
+          complement: 'Bloco B',
+          neighborhood: 'Barra',
+          city: 'Salvador',
+          state: 'BA',
+          zipCode: '40140000',
+        },
+      },
+    },
+  });
+
+  // Patient 8: Female, Baixa Estatura, Inactive (REFUSED), Full data
+  const patient8 = await prisma.patient.upsert({
+    where: { id: 'patient-008' },
+    update: {},
+    create: {
+      id: 'patient-008',
+      fullName: 'Laura Pereira',
+      birthDate: new Date('2014-02-18'),
+      gender: Gender.F,
+      mainDiagnosis: 'Baixa Estatura',
+      clinicalNotes: 'Familia recusou tratamento com GH.',
+      active: false,
+      guardian: {
+        create: {
+          fullName: 'Ricardo Pereira',
+          phonePrimary: '51999887766',
+          email: 'ricardo.pereira@email.com',
+          relationship: 'Pai',
+        },
+      },
+      address: {
+        create: {
+          street: 'Rua dos Andradas',
+          number: '200',
+          neighborhood: 'Centro Historico',
+          city: 'Porto Alegre',
+          state: 'RS',
+          zipCode: '90020000',
+        },
+      },
+    },
+  });
+
+  // Patient 9: Male, Puberdade Precoce, Active (EXTERNAL treatment)
+  const patient9 = await prisma.patient.upsert({
+    where: { id: 'patient-009' },
+    update: {},
+    create: {
+      id: 'patient-009',
+      fullName: 'Pedro Henrique Alves',
+      birthDate: new Date('2013-12-01'),
+      gender: Gender.M,
+      mainDiagnosis: 'Puberdade Precoce',
+      clinicalNotes: 'Paciente faz aplicacao em outra clinica.',
+      active: true,
+      guardian: {
+        create: {
+          fullName: 'Claudia Alves',
+          phonePrimary: '61988776655',
+          email: 'claudia.alves@email.com',
+          relationship: 'Mae',
+        },
+      },
+      address: {
+        create: {
+          street: 'SQN 308 Bloco A',
+          number: '101',
+          neighborhood: 'Asa Norte',
+          city: 'Brasilia',
+          state: 'DF',
+          zipCode: '70747000',
+        },
+      },
+    },
+  });
+
+  // Patient 10: Female, Deficiencia de GH, Active (SUSPENDED treatment)
+  const patient10 = await prisma.patient.upsert({
+    where: { id: 'patient-010' },
+    update: {},
+    create: {
+      id: 'patient-010',
+      fullName: 'Beatriz Gomes',
+      birthDate: new Date('2016-04-25'),
+      gender: Gender.F,
+      mainDiagnosis: 'Deficiencia de GH',
+      clinicalNotes: 'Tratamento suspenso temporariamente por viagem.',
+      active: true,
+      guardian: {
+        create: {
+          fullName: 'Fernando Gomes',
+          phonePrimary: '81977665544',
+          email: 'fernando.gomes@email.com',
+          relationship: 'Pai',
+        },
+      },
+      address: {
+        create: {
+          street: 'Avenida Boa Viagem',
+          number: '3000',
+          complement: 'Apto 1502',
+          neighborhood: 'Boa Viagem',
+          city: 'Recife',
+          state: 'PE',
+          zipCode: '51020000',
+        },
+      },
+    },
+  });
+
+  console.log('Created 10 patients');
+
+  // ============== TREATMENTS ==============
+  // Covering all TreatmentStatus: ONGOING, FINISHED, REFUSED, EXTERNAL, SUSPENDED
+  console.log('\n--- Creating Treatments ---');
+
+  // Treatment 1: Maria - ONGOING, Mensal protocol
+  const treatment1 = await prisma.treatment.upsert({
+    where: { id: 'treatment-001' },
+    update: {},
+    create: {
+      id: 'treatment-001',
       patientId: patient1.id,
       protocolId: protocols['Puberdade Precoce - Mensal'].id,
       status: TreatmentStatus.ONGOING,
-      startDate: subtractDays(TODAY, 90), // Started 90 days ago
+      startDate: subtractDays(TODAY, 90),
       plannedDosesBeforeConsult: 3,
       observations: 'Tratamento iniciado apos confirmacao diagnostica.',
     },
   });
 
-  // Treatment 2: Joao Pedro - GH treatment
+  // Treatment 2: Joao - ONGOING, GH treatment
   const treatment2 = await prisma.treatment.upsert({
-    where: { id: 'treatment-joao-1' },
+    where: { id: 'treatment-002' },
     update: {},
     create: {
-      id: 'treatment-joao-1',
+      id: 'treatment-002',
       patientId: patient2.id,
       protocolId: protocols['Baixa Estatura - GH Diario'].id,
       status: TreatmentStatus.ONGOING,
-      startDate: subtractDays(TODAY, 60), // Started 60 days ago
+      startDate: subtractDays(TODAY, 60),
       plannedDosesBeforeConsult: 3,
-      observations: 'Iniciado tratamento com GH. Orientacoes de aplicacao fornecidas.',
+      observations: 'Iniciado tratamento com GH.',
     },
   });
 
-  // Treatment 3: Ana Carolina - New treatment, first dose pending
+  // Treatment 3: Ana Carolina - ONGOING, Monitoring (no medication)
   const treatment3 = await prisma.treatment.upsert({
-    where: { id: 'treatment-ana-1' },
+    where: { id: 'treatment-003' },
     update: {},
     create: {
-      id: 'treatment-ana-1',
+      id: 'treatment-003',
       patientId: patient3.id,
-      protocolId: protocols['Puberdade Precoce - Mensal'].id,
+      protocolId: protocols['Acompanhamento Trimestral'].id,
       status: TreatmentStatus.ONGOING,
-      startDate: subtractDays(TODAY, 5), // Started 5 days ago
-      plannedDosesBeforeConsult: 3,
-      observations: 'Primeiro ciclo de tratamento.',
+      startDate: subtractDays(TODAY, 30),
+      plannedDosesBeforeConsult: 1,
+      observations: 'Acompanhamento de Hipotireoidismo.',
     },
   });
 
-  // Treatment 4: Lucas - Trimestral protocol
+  // Treatment 4: Lucas - ONGOING, Trimestral protocol
   const treatment4 = await prisma.treatment.upsert({
-    where: { id: 'treatment-lucas-1' },
+    where: { id: 'treatment-004' },
     update: {},
     create: {
-      id: 'treatment-lucas-1',
+      id: 'treatment-004',
       patientId: patient4.id,
       protocolId: protocols['Puberdade Precoce - Trimestral'].id,
       status: TreatmentStatus.ONGOING,
-      startDate: subtractDays(TODAY, 45), // Started 45 days ago
+      startDate: subtractDays(TODAY, 45),
       plannedDosesBeforeConsult: 2,
-      observations: 'Optou por protocolo trimestral para maior comodidade.',
+      observations: 'Protocolo trimestral para maior comodidade.',
     },
   });
 
-  // Treatment 5: Isabella - Finished treatment
+  // Treatment 5: Isabella - FINISHED
   const treatment5 = await prisma.treatment.upsert({
-    where: { id: 'treatment-isabella-1' },
+    where: { id: 'treatment-005' },
     update: {},
     create: {
-      id: 'treatment-isabella-1',
+      id: 'treatment-005',
       patientId: patient5.id,
       protocolId: protocols['Puberdade Precoce - Mensal'].id,
       status: TreatmentStatus.FINISHED,
-      startDate: subtractDays(TODAY, 365), // Started 1 year ago
+      startDate: subtractDays(TODAY, 365),
       plannedDosesBeforeConsult: 3,
       observations: 'Tratamento concluido. Paciente atingiu idade ossea adequada.',
     },
   });
 
-  console.log('Created 5 treatments');
+  // Treatment 6: Alex - ONGOING, Semestral protocol
+  const treatment6 = await prisma.treatment.upsert({
+    where: { id: 'treatment-006' },
+    update: {},
+    create: {
+      id: 'treatment-006',
+      patientId: patient7.id,
+      protocolId: protocols['Puberdade Precoce - Semestral'].id,
+      status: TreatmentStatus.ONGOING,
+      startDate: subtractDays(TODAY, 20),
+      plannedDosesBeforeConsult: 1,
+      observations: 'Primeira aplicacao semestral.',
+    },
+  });
+
+  // Treatment 7: Laura - REFUSED
+  const treatment7 = await prisma.treatment.upsert({
+    where: { id: 'treatment-007' },
+    update: {},
+    create: {
+      id: 'treatment-007',
+      patientId: patient8.id,
+      protocolId: protocols['Baixa Estatura - GH Diario'].id,
+      status: TreatmentStatus.REFUSED,
+      startDate: subtractDays(TODAY, 120),
+      plannedDosesBeforeConsult: 3,
+      observations: 'Familia optou por nao iniciar tratamento.',
+    },
+  });
+
+  // Treatment 8: Pedro - EXTERNAL
+  const treatment8 = await prisma.treatment.upsert({
+    where: { id: 'treatment-008' },
+    update: {},
+    create: {
+      id: 'treatment-008',
+      patientId: patient9.id,
+      protocolId: protocols['Puberdade Precoce - Mensal'].id,
+      status: TreatmentStatus.EXTERNAL,
+      startDate: subtractDays(TODAY, 180),
+      plannedDosesBeforeConsult: 3,
+      observations: 'Aplicacao realizada em clinica externa.',
+    },
+  });
+
+  // Treatment 9: Beatriz - SUSPENDED
+  const treatment9 = await prisma.treatment.upsert({
+    where: { id: 'treatment-009' },
+    update: {},
+    create: {
+      id: 'treatment-009',
+      patientId: patient10.id,
+      protocolId: protocols['Baixa Estatura - GH Diario'].id,
+      status: TreatmentStatus.SUSPENDED,
+      startDate: subtractDays(TODAY, 90),
+      plannedDosesBeforeConsult: 3,
+      observations: 'Suspenso por 60 dias devido viagem internacional.',
+    },
+  });
+
+  console.log('Created 9 treatments covering all statuses');
 
   // ============== DOSES ==============
+  // Covering: DoseStatus (PENDING, APPLIED, NOT_ACCEPTED)
+  // PaymentStatus (WAITING_PIX, WAITING_CARD, WAITING_BOLETO, PAID, WAITING_DELIVERY)
+  // SurveyStatus (WAITING, SENT, ANSWERED, NOT_SENT)
   console.log('\n--- Creating Doses ---');
 
-  // Maria's doses - 3 applied, 1 pending
-  const mariaDoses = [
+  const allDoses = [
+    // Maria's doses - varied statuses
     {
-      id: 'dose-maria-1',
+      id: 'dose-001',
       treatmentId: treatment1.id,
       cycleNumber: 1,
       applicationDate: subtractDays(TODAY, 90),
@@ -517,11 +709,11 @@ async function main() {
       paymentStatus: PaymentStatus.PAID,
       surveyStatus: SurveyStatus.ANSWERED,
       surveyScore: 10,
-      surveyComment: 'Otimo atendimento. Equipe muito atenciosa.',
+      surveyComment: 'Otimo atendimento.',
       inventoryLotId: inventoryMap['LOT2024001'].id,
     },
     {
-      id: 'dose-maria-2',
+      id: 'dose-002',
       treatmentId: treatment1.id,
       cycleNumber: 2,
       applicationDate: subtractDays(TODAY, 62),
@@ -529,13 +721,11 @@ async function main() {
       expiryDate: new Date('2025-12-31'),
       status: DoseStatus.APPLIED,
       paymentStatus: PaymentStatus.PAID,
-      surveyStatus: SurveyStatus.ANSWERED,
-      surveyScore: 9,
-      surveyComment: 'Tudo correu bem.',
+      surveyStatus: SurveyStatus.SENT,
       inventoryLotId: inventoryMap['LOT2024001'].id,
     },
     {
-      id: 'dose-maria-3',
+      id: 'dose-003',
       treatmentId: treatment1.id,
       cycleNumber: 3,
       applicationDate: subtractDays(TODAY, 34),
@@ -543,27 +733,25 @@ async function main() {
       expiryDate: new Date('2026-06-30'),
       status: DoseStatus.APPLIED,
       paymentStatus: PaymentStatus.PAID,
-      surveyStatus: SurveyStatus.SENT,
+      surveyStatus: SurveyStatus.WAITING,
       inventoryLotId: inventoryMap['LOT2024010'].id,
     },
     {
-      id: 'dose-maria-4',
+      id: 'dose-004',
       treatmentId: treatment1.id,
       cycleNumber: 4,
       applicationDate: subtractDays(TODAY, 6),
       lotNumber: 'LOT2024010',
       expiryDate: new Date('2026-06-30'),
       status: DoseStatus.PENDING,
-      paymentStatus: PaymentStatus.PAID,
+      paymentStatus: PaymentStatus.WAITING_PIX,
       surveyStatus: SurveyStatus.NOT_SENT,
       inventoryLotId: inventoryMap['LOT2024010'].id,
     },
-  ];
 
-  // Joao's doses - 2 applied, 1 pending
-  const joaoDoses = [
+    // Joao's doses
     {
-      id: 'dose-joao-1',
+      id: 'dose-005',
       treatmentId: treatment2.id,
       cycleNumber: 1,
       applicationDate: subtractDays(TODAY, 60),
@@ -572,11 +760,12 @@ async function main() {
       status: DoseStatus.APPLIED,
       paymentStatus: PaymentStatus.PAID,
       surveyStatus: SurveyStatus.ANSWERED,
-      surveyScore: 10,
+      surveyScore: 8,
+      surveyComment: 'Bom atendimento.',
       inventoryLotId: inventoryMap['LOT2024004'].id,
     },
     {
-      id: 'dose-joao-2',
+      id: 'dose-006',
       treatmentId: treatment2.id,
       cycleNumber: 2,
       applicationDate: subtractDays(TODAY, 30),
@@ -584,43 +773,25 @@ async function main() {
       expiryDate: new Date('2025-08-31'),
       status: DoseStatus.APPLIED,
       paymentStatus: PaymentStatus.PAID,
-      surveyStatus: SurveyStatus.WAITING,
+      surveyStatus: SurveyStatus.NOT_SENT,
       inventoryLotId: inventoryMap['LOT2024004'].id,
     },
     {
-      id: 'dose-joao-3',
+      id: 'dose-007',
       treatmentId: treatment2.id,
       cycleNumber: 3,
-      applicationDate: addDays(TODAY, 1), // Tomorrow - pending
+      applicationDate: addDays(TODAY, 1),
       lotNumber: 'LOT2024004',
       expiryDate: new Date('2025-08-31'),
       status: DoseStatus.PENDING,
-      paymentStatus: PaymentStatus.WAITING_PIX,
+      paymentStatus: PaymentStatus.WAITING_CARD,
       surveyStatus: SurveyStatus.NOT_SENT,
       inventoryLotId: inventoryMap['LOT2024004'].id,
     },
-  ];
 
-  // Ana's doses - 1 pending (first dose)
-  const anaDoses = [
+    // Lucas's doses - trimestral
     {
-      id: 'dose-ana-1',
-      treatmentId: treatment3.id,
-      cycleNumber: 1,
-      applicationDate: addDays(TODAY, 3), // 3 days from now
-      lotNumber: 'LOT2024001',
-      expiryDate: new Date('2025-12-31'),
-      status: DoseStatus.PENDING,
-      paymentStatus: PaymentStatus.WAITING_CARD,
-      surveyStatus: SurveyStatus.NOT_SENT,
-      inventoryLotId: inventoryMap['LOT2024001'].id,
-    },
-  ];
-
-  // Lucas's doses - 1 applied (trimestral)
-  const lucasDoses = [
-    {
-      id: 'dose-lucas-1',
+      id: 'dose-008',
       treatmentId: treatment4.id,
       cycleNumber: 1,
       applicationDate: subtractDays(TODAY, 45),
@@ -629,16 +800,13 @@ async function main() {
       status: DoseStatus.APPLIED,
       paymentStatus: PaymentStatus.PAID,
       surveyStatus: SurveyStatus.ANSWERED,
-      surveyScore: 8,
-      surveyComment: 'Aplicacao tranquila. Pequeno desconforto local que passou rapidamente.',
+      surveyScore: 9,
       inventoryLotId: inventoryMap['LOT2024002'].id,
     },
-  ];
 
-  // Isabella's doses - all applied (finished treatment)
-  const isabellaDoses = [
+    // Isabella's doses - finished treatment
     {
-      id: 'dose-isabella-1',
+      id: 'dose-009',
       treatmentId: treatment5.id,
       cycleNumber: 1,
       applicationDate: subtractDays(TODAY, 365),
@@ -651,7 +819,7 @@ async function main() {
       inventoryLotId: inventoryMap['LOT2024001'].id,
     },
     {
-      id: 'dose-isabella-2',
+      id: 'dose-010',
       treatmentId: treatment5.id,
       cycleNumber: 2,
       applicationDate: subtractDays(TODAY, 337),
@@ -660,25 +828,83 @@ async function main() {
       status: DoseStatus.APPLIED,
       paymentStatus: PaymentStatus.PAID,
       surveyStatus: SurveyStatus.ANSWERED,
-      surveyScore: 9,
+      surveyScore: 7,
+      surveyComment: 'Tempo de espera um pouco longo.',
       inventoryLotId: inventoryMap['LOT2024001'].id,
     },
+
+    // Alex's dose - semestral, WAITING_BOLETO
     {
-      id: 'dose-isabella-3',
-      treatmentId: treatment5.id,
-      cycleNumber: 3,
-      applicationDate: subtractDays(TODAY, 309),
+      id: 'dose-011',
+      treatmentId: treatment6.id,
+      cycleNumber: 1,
+      applicationDate: subtractDays(TODAY, 20),
+      lotNumber: 'LOT2024003',
+      expiryDate: new Date('2025-09-30'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.WAITING_BOLETO,
+      surveyStatus: SurveyStatus.SENT,
+      inventoryLotId: inventoryMap['LOT2024003'].id,
+    },
+
+    // Laura's dose - NOT_ACCEPTED (refused)
+    {
+      id: 'dose-012',
+      treatmentId: treatment7.id,
+      cycleNumber: 1,
+      applicationDate: subtractDays(TODAY, 120),
+      lotNumber: 'LOT2024004',
+      expiryDate: new Date('2025-08-31'),
+      status: DoseStatus.NOT_ACCEPTED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.NOT_SENT,
+      inventoryLotId: inventoryMap['LOT2024004'].id,
+    },
+
+    // Pedro's dose - external, WAITING_DELIVERY
+    {
+      id: 'dose-013',
+      treatmentId: treatment8.id,
+      cycleNumber: 1,
+      applicationDate: subtractDays(TODAY, 180),
       lotNumber: 'LOT2024001',
       expiryDate: new Date('2025-12-31'),
       status: DoseStatus.APPLIED,
-      paymentStatus: PaymentStatus.PAID,
+      paymentStatus: PaymentStatus.WAITING_DELIVERY,
       surveyStatus: SurveyStatus.ANSWERED,
-      surveyScore: 10,
+      surveyScore: 6,
+      surveyComment: 'Entrega demorou.',
       inventoryLotId: inventoryMap['LOT2024001'].id,
     },
-  ];
 
-  const allDoses = [...mariaDoses, ...joaoDoses, ...anaDoses, ...lucasDoses, ...isabellaDoses];
+    // Beatriz's doses - suspended treatment
+    {
+      id: 'dose-014',
+      treatmentId: treatment9.id,
+      cycleNumber: 1,
+      applicationDate: subtractDays(TODAY, 90),
+      lotNumber: 'LOT2024005',
+      expiryDate: new Date('2025-10-31'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.WAITING,
+      inventoryLotId: inventoryMap['LOT2024005'].id,
+    },
+    {
+      id: 'dose-015',
+      treatmentId: treatment9.id,
+      cycleNumber: 2,
+      applicationDate: subtractDays(TODAY, 60),
+      lotNumber: 'LOT2024005',
+      expiryDate: new Date('2025-10-31'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.ANSWERED,
+      surveyScore: 5,
+      surveyComment: 'Atendimento ok, mas demorou.',
+      inventoryLotId: inventoryMap['LOT2024005'].id,
+    },
+  ];
 
   for (const dose of allDoses) {
     await prisma.dose.upsert({
@@ -693,42 +919,12 @@ async function main() {
   console.log('\n--- Creating Consent Documents ---');
 
   const documents = [
-    {
-      id: 'doc-maria-1',
-      patientId: patient1.id,
-      fileName: 'Termo_Consentimento_Maria_Silva.pdf',
-      fileType: 'pdf',
-      fileUrl: '/uploads/patient-maria-silva/termo_consentimento.pdf',
-      uploadedBy: admin.id,
-      uploadDate: subtractDays(TODAY, 95),
-    },
-    {
-      id: 'doc-joao-1',
-      patientId: patient2.id,
-      fileName: 'Termo_Consentimento_Joao_Pedro.pdf',
-      fileType: 'pdf',
-      fileUrl: '/uploads/patient-joao-pedro/termo_consentimento.pdf',
-      uploadedBy: secretary.id,
-      uploadDate: subtractDays(TODAY, 65),
-    },
-    {
-      id: 'doc-lucas-1',
-      patientId: patient4.id,
-      fileName: 'Termo_Consentimento_Lucas_Ferreira.pdf',
-      fileType: 'pdf',
-      fileUrl: '/uploads/patient-lucas-ferreira/termo_consentimento.pdf',
-      uploadedBy: admin.id,
-      uploadDate: subtractDays(TODAY, 50),
-    },
-    {
-      id: 'doc-isabella-1',
-      patientId: patient5.id,
-      fileName: 'Termo_Consentimento_Isabella_Santos.pdf',
-      fileType: 'pdf',
-      fileUrl: '/uploads/patient-isabella-santos/termo_consentimento.pdf',
-      uploadedBy: secretary.id,
-      uploadDate: subtractDays(TODAY, 370),
-    },
+    { id: 'doc-001', patientId: patient1.id, fileName: 'Termo_Consentimento_Maria.pdf', fileType: 'pdf', fileUrl: '/uploads/patient-001/termo.pdf', uploadedBy: admin.id, uploadDate: subtractDays(TODAY, 95) },
+    { id: 'doc-002', patientId: patient2.id, fileName: 'Termo_Consentimento_Joao.pdf', fileType: 'pdf', fileUrl: '/uploads/patient-002/termo.pdf', uploadedBy: secretary.id, uploadDate: subtractDays(TODAY, 65) },
+    { id: 'doc-003', patientId: patient4.id, fileName: 'Termo_Consentimento_Lucas.pdf', fileType: 'pdf', fileUrl: '/uploads/patient-004/termo.pdf', uploadedBy: admin.id, uploadDate: subtractDays(TODAY, 50) },
+    { id: 'doc-004', patientId: patient5.id, fileName: 'Termo_Consentimento_Isabella.pdf', fileType: 'pdf', fileUrl: '/uploads/patient-005/termo.pdf', uploadedBy: secretary.id, uploadDate: subtractDays(TODAY, 370) },
+    { id: 'doc-005', patientId: patient7.id, fileName: 'Termo_Consentimento_Alex.pdf', fileType: 'pdf', fileUrl: '/uploads/patient-007/termo.pdf', uploadedBy: admin.id, uploadDate: subtractDays(TODAY, 25) },
+    { id: 'doc-006', patientId: patient9.id, fileName: 'Termo_Consentimento_Pedro.pdf', fileType: 'pdf', fileUrl: '/uploads/patient-009/termo.pdf', uploadedBy: secretary.id, uploadDate: subtractDays(TODAY, 185) },
   ];
 
   for (const doc of documents) {
@@ -740,18 +936,14 @@ async function main() {
   }
   console.log('Created', documents.length, 'consent documents');
 
-  // ============== DISMISSED LOGS (Completed contacts) ==============
+  // ============== DISMISSED LOGS ==============
   console.log('\n--- Creating Dismissed Logs ---');
 
   const dismissedLogs = [
-    // Maria's completed contacts
-    { id: 'dismissed-maria-1', contactId: `${treatment1.id}_m_7`, dismissedAt: subtractDays(TODAY, 83) },
-    { id: 'dismissed-maria-2', contactId: `${treatment1.id}_m_15`, dismissedAt: subtractDays(TODAY, 75) },
-    // Joao's completed contacts
-    { id: 'dismissed-joao-1', contactId: `${treatment2.id}_m_7`, dismissedAt: subtractDays(TODAY, 53) },
-    // Lucas's completed contacts
-    { id: 'dismissed-lucas-1', contactId: `${treatment4.id}_m_7`, dismissedAt: subtractDays(TODAY, 38) },
-    { id: 'dismissed-lucas-2', contactId: `${treatment4.id}_m_28`, dismissedAt: subtractDays(TODAY, 17) },
+    { id: 'dismissed-001', contactId: `${treatment1.id}_m_7`, dismissedAt: subtractDays(TODAY, 83) },
+    { id: 'dismissed-002', contactId: `${treatment1.id}_m_15`, dismissedAt: subtractDays(TODAY, 75) },
+    { id: 'dismissed-003', contactId: `${treatment2.id}_m_7`, dismissedAt: subtractDays(TODAY, 53) },
+    { id: 'dismissed-004', contactId: `${treatment4.id}_m_7`, dismissedAt: subtractDays(TODAY, 38) },
   ];
 
   for (const log of dismissedLogs) {
@@ -767,12 +959,14 @@ async function main() {
   console.log('\n--- Creating Dispense Logs ---');
 
   const dispenseLogs = [
-    { patientId: patient1.id, inventoryItemId: inventoryMap['LOT2024001'].id, medicationName: 'Lectrum 3.75mg', quantity: 1, doseId: 'dose-maria-1', date: subtractDays(TODAY, 90) },
-    { patientId: patient1.id, inventoryItemId: inventoryMap['LOT2024001'].id, medicationName: 'Lectrum 3.75mg', quantity: 1, doseId: 'dose-maria-2', date: subtractDays(TODAY, 62) },
-    { patientId: patient1.id, inventoryItemId: inventoryMap['LOT2024010'].id, medicationName: 'Lectrum 3.75mg', quantity: 1, doseId: 'dose-maria-3', date: subtractDays(TODAY, 34) },
-    { patientId: patient2.id, inventoryItemId: inventoryMap['LOT2024004'].id, medicationName: 'Norditropin 12mg', quantity: 1, doseId: 'dose-joao-1', date: subtractDays(TODAY, 60) },
-    { patientId: patient2.id, inventoryItemId: inventoryMap['LOT2024004'].id, medicationName: 'Norditropin 12mg', quantity: 1, doseId: 'dose-joao-2', date: subtractDays(TODAY, 30) },
-    { patientId: patient4.id, inventoryItemId: inventoryMap['LOT2024002'].id, medicationName: 'Neodeca 11.25mg', quantity: 1, doseId: 'dose-lucas-1', date: subtractDays(TODAY, 45) },
+    { patientId: patient1.id, inventoryItemId: inventoryMap['LOT2024001'].id, medicationName: 'Lectrum 3.75mg', quantity: 1, doseId: 'dose-001', date: subtractDays(TODAY, 90) },
+    { patientId: patient1.id, inventoryItemId: inventoryMap['LOT2024001'].id, medicationName: 'Lectrum 3.75mg', quantity: 1, doseId: 'dose-002', date: subtractDays(TODAY, 62) },
+    { patientId: patient1.id, inventoryItemId: inventoryMap['LOT2024010'].id, medicationName: 'Lectrum 3.75mg', quantity: 1, doseId: 'dose-003', date: subtractDays(TODAY, 34) },
+    { patientId: patient2.id, inventoryItemId: inventoryMap['LOT2024004'].id, medicationName: 'Norditropin 12mg', quantity: 1, doseId: 'dose-005', date: subtractDays(TODAY, 60) },
+    { patientId: patient2.id, inventoryItemId: inventoryMap['LOT2024004'].id, medicationName: 'Norditropin 12mg', quantity: 1, doseId: 'dose-006', date: subtractDays(TODAY, 30) },
+    { patientId: patient4.id, inventoryItemId: inventoryMap['LOT2024002'].id, medicationName: 'Neodeca 11.25mg', quantity: 1, doseId: 'dose-008', date: subtractDays(TODAY, 45) },
+    { patientId: patient7.id, inventoryItemId: inventoryMap['LOT2024003'].id, medicationName: 'Neodeca 22.5mg', quantity: 1, doseId: 'dose-011', date: subtractDays(TODAY, 20) },
+    { patientId: patient10.id, inventoryItemId: inventoryMap['LOT2024005'].id, medicationName: 'Norditropin 24mg', quantity: 1, doseId: 'dose-014', date: subtractDays(TODAY, 90) },
   ];
 
   for (const log of dispenseLogs) {
@@ -786,6 +980,7 @@ async function main() {
   const purchaseRequests = [
     { medicationName: 'Lectrum 3.75mg', predictedConsumption10Days: 8, currentStock: 25, suggestedQuantity: 0, status: 'PENDING' as const },
     { medicationName: 'Neodeca 11.25mg', predictedConsumption10Days: 3, currentStock: 5, suggestedQuantity: 10, status: 'ORDERED' as const },
+    { medicationName: 'Norditropin 24mg', predictedConsumption10Days: 2, currentStock: 8, suggestedQuantity: 5, status: 'RECEIVED' as const },
   ];
 
   for (const req of purchaseRequests) {
@@ -801,22 +996,22 @@ async function main() {
   console.log('  Admin: admin@azevedo.com / admin123');
   console.log('  Doctor: medico@azevedo.com / doctor123');
   console.log('  Secretary: secretaria@azevedo.com / secretary123');
-  console.log('\nTest Patients:');
-  console.log('  1. Maria Silva Santos - Active, ONGOING treatment, 3 applied + 1 pending dose');
-  console.log('  2. Joao Pedro Oliveira - Active, ONGOING treatment, 2 applied + 1 pending dose');
-  console.log('  3. Ana Carolina Mendes - Active, ONGOING treatment, 1 pending dose (new patient)');
-  console.log('  4. Lucas Ferreira Costa - Active, ONGOING treatment (trimestral), 1 applied dose');
-  console.log('  5. Isabella Santos Lima - Inactive, FINISHED treatment');
-  console.log('  6. Gabriel Souza - Active, incomplete registration (no guardian/address)');
-  console.log('\nTimeline Events:');
-  console.log('  - Maria: Has upcoming contacts (day 21) and past completed events');
-  console.log('  - Joao: Has pending dose tomorrow + upcoming contacts');
-  console.log('  - Ana: Has pending dose in 3 days + upcoming contacts');
-  console.log('  - Lucas: Has upcoming contacts (day 56, 77)');
-  console.log('\nChecklist Items:');
-  console.log('  - Ana: Pending payment (WAITING_CARD)');
-  console.log('  - Joao: Pending payment (WAITING_PIX)');
-  console.log('  - Gabriel: Incomplete registration');
+  console.log('\n--- COVERAGE SUMMARY ---');
+  console.log('\nGenders: F(5), M(4), OTHER(1)');
+  console.log('Diagnoses: All 6 types covered');
+  console.log('Cities: SP, RJ, MG, PR, BA, RS, DF, PE');
+  console.log('\nTreatment Statuses:');
+  console.log('  ONGOING: 5 | FINISHED: 1 | REFUSED: 1 | EXTERNAL: 1 | SUSPENDED: 1');
+  console.log('\nDose Statuses:');
+  console.log('  APPLIED: 12 | PENDING: 2 | NOT_ACCEPTED: 1');
+  console.log('\nPayment Statuses:');
+  console.log('  PAID: 10 | WAITING_PIX: 1 | WAITING_CARD: 1 | WAITING_BOLETO: 1 | WAITING_DELIVERY: 1');
+  console.log('\nSurvey Statuses:');
+  console.log('  ANSWERED: 8 | SENT: 2 | WAITING: 2 | NOT_SENT: 3');
+  console.log('\nSurvey Scores: 5, 6, 7, 8, 9, 10 (all different)');
+  console.log('\nSpecial Cases:');
+  console.log('  - Gabriel: Incomplete registration (no guardian/address)');
+  console.log('  - Ana Carolina: Monitoring protocol (no medication)');
   console.log('========================================\n');
 }
 
