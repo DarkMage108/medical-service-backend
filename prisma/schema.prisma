@@ -304,9 +304,14 @@ model ConsentDocument {
 }
 
 model DismissedLog {
-  id          String   @id @default(cuid())
-  contactId   String   @unique
-  dismissedAt DateTime @default(now())
+  id                   String   @id @default(cuid())
+  contactId            String   @unique
+  dismissedAt          DateTime @default(now())
+  feedbackText         String?
+  feedbackClassification String?
+  feedbackNeedsMedical Boolean?
+  feedbackUrgency      String?
+  feedbackStatus       String?  @default("pending")
 
   @@map("dismissed_logs")
 }

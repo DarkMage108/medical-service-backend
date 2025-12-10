@@ -164,13 +164,57 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
 
 export const dismissContact = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { contactId } = req.body;
+    const { contactId, feedback } = req.body;
 
     const dismissed = await prisma.dismissedLog.create({
-      data: { contactId },
+      data: {
+        contactId,
+        feedbackText: feedback?.text || null,
+        feedbackClassification: feedback?.classification || null,
+        feedbackNeedsMedical: feedback?.needsMedicalResponse || null,
+        feedbackUrgency: feedback?.urgency || null,
+        feedbackStatus: feedback?.text ? 'pending' : null,
+      },
     });
 
     sendCreated(res, dismissed);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateDismissedLogFeedback = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contactId } = req.params;
+    const { feedback } = req.body;
+
+    const updated = await prisma.dismissedLog.update({
+      where: { contactId },
+      data: {
+        feedbackText: feedback?.text,
+        feedbackClassification: feedback?.classification,
+        feedbackNeedsMedical: feedback?.needsMedicalResponse,
+        feedbackUrgency: feedback?.urgency,
+        feedbackStatus: feedback?.status || 'pending',
+      },
+    });
+
+    sendSuccess(res, updated);
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const resolveFeedback = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { contactId } = req.params;
+
+    const updated = await prisma.dismissedLog.update({
+      where: { contactId },
+      data: { feedbackStatus: 'resolved' },
+    });
+
+    sendSuccess(res, updated);
   } catch (error) {
     next(error);
   }
