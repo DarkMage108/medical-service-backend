@@ -122,8 +122,8 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       nurse,
     } = req.body;
 
-    if (!treatmentId || !cycleNumber || !applicationDate || !lotNumber || !expiryDate) {
-      throw new BadRequestError('Treatment, cycle number, application date, lot number, and expiry date are required');
+    if (!treatmentId || !cycleNumber || !applicationDate) {
+      throw new BadRequestError('Treatment, cycle number, and application date are required');
     }
 
     // Get treatment with protocol for frequency calculation
@@ -151,8 +151,8 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
         treatmentId,
         cycleNumber,
         applicationDate: appDate,
-        lotNumber,
-        expiryDate: new Date(expiryDate),
+        lotNumber: lotNumber || null,
+        expiryDate: expiryDate ? new Date(expiryDate) : null,
         status: status || 'PENDING',
         calculatedNextDate,
         daysUntilNext,
@@ -161,7 +161,7 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
         paymentStatus: paymentStatus || 'WAITING_PIX',
         nurse: nurse || false,
         surveyStatus: nurse ? 'WAITING' : 'NOT_SENT',
-        inventoryLotId,
+        inventoryLotId: inventoryLotId || null,
       },
       include: {
         treatment: {

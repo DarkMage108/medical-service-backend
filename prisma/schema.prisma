@@ -212,8 +212,8 @@ model Dose {
   treatmentId          String
   cycleNumber          Int
   applicationDate      DateTime
-  lotNumber            String
-  expiryDate           DateTime
+  lotNumber            String?
+  expiryDate           DateTime?
   status               DoseStatus    @default(PENDING)
   calculatedNextDate   DateTime?
   daysUntilNext        Int?

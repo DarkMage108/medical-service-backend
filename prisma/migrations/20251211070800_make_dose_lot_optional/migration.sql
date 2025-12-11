@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "doses" ALTER COLUMN "lotNumber" DROP NOT NULL;
+ALTER TABLE "doses" ALTER COLUMN "expiryDate" DROP NOT NULL;
