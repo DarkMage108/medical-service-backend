@@ -57,7 +57,19 @@ async function main() {
     },
   });
 
-  console.log('Created 3 users (admin, doctor, secretary)');
+  const nursePassword = await bcrypt.hash('nurse123', 12);
+  const nurse = await prisma.user.upsert({
+    where: { email: 'enfermeira@azevedo.com' },
+    update: {},
+    create: {
+      email: 'enfermeira@azevedo.com',
+      password: nursePassword,
+      name: 'Ana Oliveira',
+      role: UserRole.NURSE,
+    },
+  });
+
+  console.log('Created 4 users (admin, doctor, secretary, nurse)');
 
   // ============== DIAGNOSES ==============
   console.log('\n--- Creating Diagnoses ---');

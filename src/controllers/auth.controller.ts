@@ -146,3 +146,30 @@ export const changePassword = async (req: Request, res: Response, next: NextFunc
     next(error);
   }
 };
+
+export const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { name } = req.body;
+
+    if (!name || name.trim().length === 0) {
+      throw new BadRequestError('Name is required');
+    }
+
+    const user = await prisma.user.update({
+      where: { id: req.user!.id },
+      data: { name: name.trim() },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        role: true,
+        active: true,
+        createdAt: true,
+      },
+    });
+
+    sendSuccess(res, user);
+  } catch (error) {
+    next(error);
+  }
+};

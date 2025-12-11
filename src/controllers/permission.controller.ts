@@ -7,6 +7,7 @@ enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
   SECRETARY = 'SECRETARY',
+  NURSE = 'NURSE',
 }
 
 // Define available menu items with their default permissions per role
@@ -44,6 +45,16 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
     protocols: true,
   },
   [UserRole.SECRETARY]: {
+    dashboard: true,
+    checklist: true,
+    nursing: true,
+    patients: true,
+    history: true,
+    inventory: false,
+    diagnoses: false,
+    protocols: false,
+  },
+  [UserRole.NURSE]: {
     dashboard: true,
     checklist: true,
     nursing: true,

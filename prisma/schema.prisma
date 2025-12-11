@@ -16,6 +16,7 @@ enum UserRole {
   ADMIN
   DOCTOR
   SECRETARY
+  NURSE
 }
 
 enum Gender {

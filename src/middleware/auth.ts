@@ -8,6 +8,7 @@ enum UserRole {
   ADMIN = 'ADMIN',
   DOCTOR = 'DOCTOR',
   SECRETARY = 'SECRETARY',
+  NURSE = 'NURSE',
 }
 
 interface JwtPayload {
