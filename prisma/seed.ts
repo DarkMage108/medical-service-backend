@@ -13,6 +13,15 @@ function subtractDays(date: Date, days: number): Date {
   return addDays(date, -days);
 }
 
+function calculateDoseFields(applicationDate: Date, frequencyDays: number) {
+  const calculatedNextDate = addDays(applicationDate, frequencyDays);
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const diffTime = calculatedNextDate.getTime() - today.getTime();
+  const daysUntilNext = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  return { calculatedNextDate, daysUntilNext };
+}
+
 async function main() {
   console.log('Seeding database with diverse test data...');
 
@@ -708,6 +717,19 @@ async function main() {
   // SurveyStatus (WAITING, SENT, ANSWERED, NOT_SENT)
   console.log('\n--- Creating Doses ---');
 
+  // Map treatment ID to frequency days
+  const treatmentFrequencyMap: Record<string, number> = {
+    'treatment-001': 28,  // Puberdade Precoce - Mensal
+    'treatment-002': 30,  // Baixa Estatura - GH Diario
+    'treatment-003': 90,  // Acompanhamento Trimestral
+    'treatment-004': 84,  // Puberdade Precoce - Trimestral
+    'treatment-005': 28,  // Puberdade Precoce - Mensal
+    'treatment-006': 168, // Puberdade Precoce - Semestral
+    'treatment-007': 30,  // Baixa Estatura - GH Diario
+    'treatment-008': 28,  // Puberdade Precoce - Mensal
+    'treatment-009': 30,  // Baixa Estatura - GH Diario
+  };
+
   const allDoses = [
     // Maria's doses - varied statuses
     {
@@ -1083,10 +1105,17 @@ async function main() {
   ];
 
   for (const dose of allDoses) {
+    const frequencyDays = treatmentFrequencyMap[dose.treatmentId] || 28;
+    const { calculatedNextDate, daysUntilNext } = calculateDoseFields(dose.applicationDate, frequencyDays);
+
     await prisma.dose.upsert({
       where: { id: dose.id },
       update: {},
-      create: dose,
+      create: {
+        ...dose,
+        calculatedNextDate,
+        daysUntilNext,
+      },
     });
   }
   console.log('Created', allDoses.length, 'doses');
