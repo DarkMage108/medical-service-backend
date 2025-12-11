@@ -12,8 +12,9 @@ enum UserRole {
 // Define available menu items with their default permissions per role
 export const MENU_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
-  { key: 'patients', label: 'Pacientes', path: '/pacientes' },
   { key: 'checklist', label: 'Checklist', path: '/checklist' },
+  { key: 'nursing', label: 'Enfermagem', path: '/enfermagem' },
+  { key: 'patients', label: 'Pacientes', path: '/pacientes' },
   { key: 'history', label: 'Histórico', path: '/historico' },
   { key: 'inventory', label: 'Estoque', path: '/estoque' },
   { key: 'diagnoses', label: 'Diagnósticos', path: '/diagnosticos' },
@@ -24,8 +25,9 @@ export const MENU_ITEMS = [
 const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
   [UserRole.ADMIN]: {
     dashboard: true,
-    patients: true,
     checklist: true,
+    nursing: true,
+    patients: true,
     history: true,
     inventory: true,
     diagnoses: true,
@@ -33,8 +35,9 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
   },
   [UserRole.DOCTOR]: {
     dashboard: true,
-    patients: true,
     checklist: true,
+    nursing: true,
+    patients: true,
     history: true,
     inventory: true,
     diagnoses: true,
@@ -42,8 +45,9 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
   },
   [UserRole.SECRETARY]: {
     dashboard: true,
-    patients: true,
     checklist: true,
+    nursing: true,
+    patients: true,
     history: true,
     inventory: false,
     diagnoses: false,

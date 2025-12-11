@@ -763,6 +763,7 @@ async function main() {
       surveyScore: 8,
       surveyComment: 'Bom atendimento.',
       inventoryLotId: inventoryMap['LOT2024004'].id,
+      nurse: true,
     },
     {
       id: 'dose-006',
@@ -775,18 +776,20 @@ async function main() {
       paymentStatus: PaymentStatus.PAID,
       surveyStatus: SurveyStatus.NOT_SENT,
       inventoryLotId: inventoryMap['LOT2024004'].id,
+      nurse: true,
     },
     {
       id: 'dose-007',
       treatmentId: treatment2.id,
       cycleNumber: 3,
-      applicationDate: addDays(TODAY, 1),
+      applicationDate: TODAY, // Dose para HOJE
       lotNumber: 'LOT2024004',
       expiryDate: new Date('2025-08-31'),
       status: DoseStatus.PENDING,
       paymentStatus: PaymentStatus.WAITING_CARD,
       surveyStatus: SurveyStatus.NOT_SENT,
       inventoryLotId: inventoryMap['LOT2024004'].id,
+      nurse: true,
     },
 
     // Lucas's doses - trimestral
@@ -904,6 +907,167 @@ async function main() {
       surveyComment: 'Atendimento ok, mas demorou.',
       inventoryLotId: inventoryMap['LOT2024005'].id,
     },
+
+    // ============== NURSING TEST DATA ==============
+    // More doses with nurse: true for Enfermagem page testing
+    // Includes PENDING doses for TODAY and recent days with various survey scores for NPS
+
+    // Maria - nursing dose for TODAY (pending)
+    {
+      id: 'dose-016',
+      treatmentId: treatment1.id,
+      cycleNumber: 5,
+      applicationDate: TODAY,
+      lotNumber: 'LOT2024010',
+      expiryDate: new Date('2026-06-30'),
+      status: DoseStatus.PENDING,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.NOT_SENT,
+      inventoryLotId: inventoryMap['LOT2024010'].id,
+      nurse: true,
+    },
+
+    // Lucas - nursing dose for TODAY (pending)
+    {
+      id: 'dose-017',
+      treatmentId: treatment4.id,
+      cycleNumber: 2,
+      applicationDate: TODAY,
+      lotNumber: 'LOT2024002',
+      expiryDate: new Date('2025-06-30'),
+      status: DoseStatus.PENDING,
+      paymentStatus: PaymentStatus.WAITING_PIX,
+      surveyStatus: SurveyStatus.NOT_SENT,
+      inventoryLotId: inventoryMap['LOT2024002'].id,
+      nurse: true,
+    },
+
+    // Alex - nursing dose applied recently with survey (promoter - score 9)
+    {
+      id: 'dose-018',
+      treatmentId: treatment6.id,
+      cycleNumber: 2,
+      applicationDate: subtractDays(TODAY, 5),
+      lotNumber: 'LOT2024003',
+      expiryDate: new Date('2025-09-30'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.ANSWERED,
+      surveyScore: 9,
+      surveyComment: 'Excelente atendimento da enfermagem!',
+      inventoryLotId: inventoryMap['LOT2024003'].id,
+      nurse: true,
+    },
+
+    // Maria - nursing dose applied within 30 days with survey (promoter - score 10)
+    {
+      id: 'dose-019',
+      treatmentId: treatment1.id,
+      cycleNumber: 6,
+      applicationDate: subtractDays(TODAY, 15),
+      lotNumber: 'LOT2024010',
+      expiryDate: new Date('2026-06-30'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.ANSWERED,
+      surveyScore: 10,
+      surveyComment: 'Atendimento perfeito!',
+      inventoryLotId: inventoryMap['LOT2024010'].id,
+      nurse: true,
+    },
+
+    // Joao - nursing dose applied within 30 days with survey (passive - score 7)
+    {
+      id: 'dose-020',
+      treatmentId: treatment2.id,
+      cycleNumber: 4,
+      applicationDate: subtractDays(TODAY, 10),
+      lotNumber: 'LOT2024004',
+      expiryDate: new Date('2025-08-31'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.ANSWERED,
+      surveyScore: 7,
+      surveyComment: 'Atendimento bom, nada de especial.',
+      inventoryLotId: inventoryMap['LOT2024004'].id,
+      nurse: true,
+    },
+
+    // Lucas - nursing dose applied within 30 days with survey (detractor - score 4)
+    {
+      id: 'dose-021',
+      treatmentId: treatment4.id,
+      cycleNumber: 3,
+      applicationDate: subtractDays(TODAY, 20),
+      lotNumber: 'LOT2024002',
+      expiryDate: new Date('2025-06-30'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.ANSWERED,
+      surveyScore: 4,
+      surveyComment: 'Esperei muito tempo para ser atendido.',
+      inventoryLotId: inventoryMap['LOT2024002'].id,
+      nurse: true,
+    },
+
+    // Alex - nursing dose applied within 60 days with survey (promoter - score 10)
+    {
+      id: 'dose-022',
+      treatmentId: treatment6.id,
+      cycleNumber: 3,
+      applicationDate: subtractDays(TODAY, 45),
+      lotNumber: 'LOT2024003',
+      expiryDate: new Date('2025-09-30'),
+      status: DoseStatus.APPLIED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.ANSWERED,
+      surveyScore: 10,
+      surveyComment: 'Servico impecavel!',
+      inventoryLotId: inventoryMap['LOT2024003'].id,
+      nurse: true,
+    },
+
+    // Maria - nursing dose NOT_ACCEPTED (refused)
+    {
+      id: 'dose-023',
+      treatmentId: treatment1.id,
+      cycleNumber: 7,
+      applicationDate: subtractDays(TODAY, 3),
+      lotNumber: 'LOT2024010',
+      expiryDate: new Date('2026-06-30'),
+      status: DoseStatus.NOT_ACCEPTED,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.NOT_SENT,
+      inventoryLotId: inventoryMap['LOT2024010'].id,
+      nurse: true,
+    },
+
+    // Joao - nursing dose for tomorrow (pending - scheduled)
+    {
+      id: 'dose-024',
+      treatmentId: treatment2.id,
+      cycleNumber: 5,
+      applicationDate: addDays(TODAY, 1),
+      lotNumber: 'LOT2024004',
+      expiryDate: new Date('2025-08-31'),
+      status: DoseStatus.PENDING,
+      paymentStatus: PaymentStatus.WAITING_CARD,
+      surveyStatus: SurveyStatus.NOT_SENT,
+      inventoryLotId: inventoryMap['LOT2024004'].id,
+      nurse: true,
+    },
+
+    // Alex - nursing dose without lot/expiry (no medication purchase)
+    {
+      id: 'dose-025',
+      treatmentId: treatment6.id,
+      cycleNumber: 4,
+      applicationDate: addDays(TODAY, 3),
+      status: DoseStatus.PENDING,
+      paymentStatus: PaymentStatus.PAID,
+      surveyStatus: SurveyStatus.NOT_SENT,
+      nurse: true,
+    },
   ];
 
   for (const dose of allDoses) {
@@ -1003,15 +1167,22 @@ async function main() {
   console.log('\nTreatment Statuses:');
   console.log('  ONGOING: 5 | FINISHED: 1 | REFUSED: 1 | EXTERNAL: 1 | SUSPENDED: 1');
   console.log('\nDose Statuses:');
-  console.log('  APPLIED: 12 | PENDING: 2 | NOT_ACCEPTED: 1');
+  console.log('  APPLIED: 17 | PENDING: 6 | NOT_ACCEPTED: 2');
   console.log('\nPayment Statuses:');
-  console.log('  PAID: 10 | WAITING_PIX: 1 | WAITING_CARD: 1 | WAITING_BOLETO: 1 | WAITING_DELIVERY: 1');
+  console.log('  PAID: Multiple | WAITING_PIX: 2 | WAITING_CARD: 2 | WAITING_BOLETO: 1 | WAITING_DELIVERY: 1');
   console.log('\nSurvey Statuses:');
-  console.log('  ANSWERED: 8 | SENT: 2 | WAITING: 2 | NOT_SENT: 3');
-  console.log('\nSurvey Scores: 5, 6, 7, 8, 9, 10 (all different)');
+  console.log('  ANSWERED: 12 | SENT: 2 | WAITING: 2 | NOT_SENT: 9');
+  console.log('\nSurvey Scores: 4, 5, 6, 7, 8, 9, 10 (varied for NPS)');
+  console.log('\nNursing (Enfermagem) Test Data:');
+  console.log('  - 10 doses with nurse: true');
+  console.log('  - 4 PENDING doses for today/future (Agendado status)');
+  console.log('  - 5 APPLIED doses with surveys (various NPS scores)');
+  console.log('  - 1 NOT_ACCEPTED dose (Recusado status)');
+  console.log('  - NPS test scores: 4 (detractor), 7 (passive), 9, 10 (promoters)');
   console.log('\nSpecial Cases:');
   console.log('  - Gabriel: Incomplete registration (no guardian/address)');
   console.log('  - Ana Carolina: Monitoring protocol (no medication)');
+  console.log('  - dose-025: No lot/expiry (medication not purchased)');
   console.log('========================================\n');
 }
 
