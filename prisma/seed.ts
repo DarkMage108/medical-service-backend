@@ -910,9 +910,9 @@ async function main() {
 
     // ============== NURSING TEST DATA ==============
     // More doses with nurse: true for Enfermagem page testing
-    // Includes PENDING doses for TODAY and recent days with various survey scores for NPS
+    // All dates are unique to avoid duplication
 
-    // Maria - nursing dose for TODAY (pending)
+    // Maria - nursing dose for TODAY morning (pending)
     {
       id: 'dose-016',
       treatmentId: treatment1.id,
@@ -927,12 +927,12 @@ async function main() {
       nurse: true,
     },
 
-    // Lucas - nursing dose for TODAY (pending)
+    // Lucas - nursing dose for 2 days from now (pending)
     {
       id: 'dose-017',
       treatmentId: treatment4.id,
       cycleNumber: 2,
-      applicationDate: TODAY,
+      applicationDate: addDays(TODAY, 2),
       lotNumber: 'LOT2024002',
       expiryDate: new Date('2025-06-30'),
       status: DoseStatus.PENDING,
@@ -942,12 +942,12 @@ async function main() {
       nurse: true,
     },
 
-    // Alex - nursing dose applied recently with survey (promoter - score 9)
+    // Alex - nursing dose applied 7 days ago with survey (promoter - score 9)
     {
       id: 'dose-018',
       treatmentId: treatment6.id,
       cycleNumber: 2,
-      applicationDate: subtractDays(TODAY, 5),
+      applicationDate: subtractDays(TODAY, 7),
       lotNumber: 'LOT2024003',
       expiryDate: new Date('2025-09-30'),
       status: DoseStatus.APPLIED,
@@ -959,12 +959,12 @@ async function main() {
       nurse: true,
     },
 
-    // Maria - nursing dose applied within 30 days with survey (promoter - score 10)
+    // Maria - nursing dose applied 12 days ago with survey (promoter - score 10)
     {
       id: 'dose-019',
       treatmentId: treatment1.id,
       cycleNumber: 6,
-      applicationDate: subtractDays(TODAY, 15),
+      applicationDate: subtractDays(TODAY, 12),
       lotNumber: 'LOT2024010',
       expiryDate: new Date('2026-06-30'),
       status: DoseStatus.APPLIED,
@@ -976,12 +976,12 @@ async function main() {
       nurse: true,
     },
 
-    // Joao - nursing dose applied within 30 days with survey (passive - score 7)
+    // Joao - nursing dose applied 18 days ago with survey (passive - score 7)
     {
       id: 'dose-020',
       treatmentId: treatment2.id,
       cycleNumber: 4,
-      applicationDate: subtractDays(TODAY, 10),
+      applicationDate: subtractDays(TODAY, 18),
       lotNumber: 'LOT2024004',
       expiryDate: new Date('2025-08-31'),
       status: DoseStatus.APPLIED,
@@ -993,12 +993,12 @@ async function main() {
       nurse: true,
     },
 
-    // Lucas - nursing dose applied within 30 days with survey (detractor - score 4)
+    // Lucas - nursing dose applied 25 days ago with survey (detractor - score 4)
     {
       id: 'dose-021',
       treatmentId: treatment4.id,
       cycleNumber: 3,
-      applicationDate: subtractDays(TODAY, 20),
+      applicationDate: subtractDays(TODAY, 25),
       lotNumber: 'LOT2024002',
       expiryDate: new Date('2025-06-30'),
       status: DoseStatus.APPLIED,
@@ -1010,12 +1010,12 @@ async function main() {
       nurse: true,
     },
 
-    // Alex - nursing dose applied within 60 days with survey (promoter - score 10)
+    // Alex - nursing dose applied 40 days ago with survey (promoter - score 10)
     {
       id: 'dose-022',
       treatmentId: treatment6.id,
       cycleNumber: 3,
-      applicationDate: subtractDays(TODAY, 45),
+      applicationDate: subtractDays(TODAY, 40),
       lotNumber: 'LOT2024003',
       expiryDate: new Date('2025-09-30'),
       status: DoseStatus.APPLIED,
@@ -1027,12 +1027,12 @@ async function main() {
       nurse: true,
     },
 
-    // Maria - nursing dose NOT_ACCEPTED (refused)
+    // Maria - nursing dose NOT_ACCEPTED 4 days ago (refused)
     {
       id: 'dose-023',
       treatmentId: treatment1.id,
       cycleNumber: 7,
-      applicationDate: subtractDays(TODAY, 3),
+      applicationDate: subtractDays(TODAY, 4),
       lotNumber: 'LOT2024010',
       expiryDate: new Date('2026-06-30'),
       status: DoseStatus.NOT_ACCEPTED,
@@ -1057,12 +1057,12 @@ async function main() {
       nurse: true,
     },
 
-    // Alex - nursing dose without lot/expiry (no medication purchase)
+    // Alex - nursing dose 5 days from now without lot/expiry (no medication purchase)
     {
       id: 'dose-025',
       treatmentId: treatment6.id,
       cycleNumber: 4,
-      applicationDate: addDays(TODAY, 3),
+      applicationDate: addDays(TODAY, 5),
       status: DoseStatus.PENDING,
       paymentStatus: PaymentStatus.PAID,
       surveyStatus: SurveyStatus.NOT_SENT,
