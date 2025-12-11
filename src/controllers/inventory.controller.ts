@@ -142,6 +142,30 @@ export const deleteInventoryItem = async (req: Request, res: Response, next: Nex
   try {
     const { id } = req.params;
 
+    // Check if inventory item is referenced by any doses
+    const referencedDoses = await prisma.dose.count({
+      where: { inventoryLotId: id },
+    });
+
+    if (referencedDoses > 0) {
+      throw new BadRequestError(
+        `Este lote não pode ser excluído pois está vinculado a ${referencedDoses} dose(s). ` +
+        `Você pode desativar o lote ou remover os vínculos das doses primeiro.`
+      );
+    }
+
+    // Check if referenced by dispense logs
+    const referencedDispenseLogs = await prisma.dispenseLog.count({
+      where: { inventoryItemId: id },
+    });
+
+    if (referencedDispenseLogs > 0) {
+      throw new BadRequestError(
+        `Este lote não pode ser excluído pois possui ${referencedDispenseLogs} registro(s) de dispensação. ` +
+        `Você pode desativar o lote ao invés de excluí-lo.`
+      );
+    }
+
     await prisma.inventoryItem.delete({
       where: { id },
     });
