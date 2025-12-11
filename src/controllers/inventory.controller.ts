@@ -142,10 +142,8 @@ export const deleteInventoryItem = async (req: Request, res: Response, next: Nex
   try {
     const { id } = req.params;
 
-    // Soft delete
-    await prisma.inventoryItem.update({
+    await prisma.inventoryItem.delete({
       where: { id },
-      data: { active: false },
     });
 
     sendNoContent(res);
