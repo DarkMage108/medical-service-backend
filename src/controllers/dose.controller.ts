@@ -120,6 +120,11 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       consultationDate,
       paymentStatus,
       nurse,
+      purchased,
+      deliveryStatus,
+      surveyStatus,
+      surveyScore,
+      surveyComment,
     } = req.body;
 
     if (!treatmentId || !cycleNumber || !applicationDate) {
@@ -160,8 +165,12 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
         consultationDate: consultationDate ? new Date(consultationDate) : null,
         paymentStatus: paymentStatus || 'WAITING_PIX',
         nurse: nurse || false,
-        surveyStatus: nurse ? 'WAITING' : 'NOT_SENT',
+        surveyStatus: surveyStatus || (nurse ? 'WAITING' : 'NOT_SENT'),
+        surveyScore: surveyScore || null,
+        surveyComment: surveyComment || null,
         inventoryLotId: inventoryLotId || null,
+        purchased: purchased !== undefined ? purchased : true,
+        deliveryStatus: deliveryStatus || null,
       },
       include: {
         treatment: {
@@ -200,6 +209,8 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       surveyStatus,
       surveyScore,
       surveyComment,
+      purchased,
+      deliveryStatus,
     } = req.body;
 
     // Get existing dose with treatment info
@@ -260,6 +271,8 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     }
     if (surveyScore !== undefined) updateData.surveyScore = surveyScore;
     if (surveyComment !== undefined) updateData.surveyComment = surveyComment;
+    if (purchased !== undefined) updateData.purchased = purchased;
+    if (deliveryStatus !== undefined) updateData.deliveryStatus = deliveryStatus;
 
     const dose = await prisma.dose.update({
       where: { id },
