@@ -100,7 +100,7 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
     const futureLimit = new Date(today);
     futureLimit.setDate(futureLimit.getDate() + daysAhead);
 
-    // Get active treatments with protocols and milestones
+    // Get active treatments with protocols, milestones, and last applied dose
     const treatments = await prisma.treatment.findMany({
       where: {
         status: 'ONGOING',
@@ -120,6 +120,12 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
             milestones: true,
           },
         },
+        doses: {
+          where: { status: 'APPLIED' },
+          orderBy: { applicationDate: 'desc' },
+          take: 1,
+          select: { applicationDate: true },
+        },
       },
     });
 
@@ -131,8 +137,12 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
     const contacts: any[] = [];
 
     treatments.forEach((treatment: any) => {
+      // Use last applied dose date, or fallback to treatment startDate
+      const lastAppliedDose = treatment.doses?.[0];
+      const referenceDate = lastAppliedDose?.applicationDate || treatment.startDate;
+
       treatment.protocol.milestones.forEach((milestone: any) => {
-        const contactDate = new Date(treatment.startDate);
+        const contactDate = new Date(referenceDate);
         contactDate.setDate(contactDate.getDate() + milestone.day);
 
         const contactId = `${treatment.id}_m_${milestone.day}`;

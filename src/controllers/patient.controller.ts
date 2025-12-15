@@ -43,12 +43,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
               relationship: true,
             },
           },
-          address: {
-            select: {
-              city: true,
-              state: true,
-            },
-          },
+          address: true,
           treatments: {
             where: { status: 'ONGOING' },
             include: {
