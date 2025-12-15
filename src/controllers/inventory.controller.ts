@@ -200,6 +200,8 @@ export const getAvailableLots = async (req: Request, res: Response, next: NextFu
         lotNumber: true,
         expiryDate: true,
         quantity: true,
+        active: true,
+        unit: true,
       },
       orderBy: { expiryDate: 'asc' },
     });
