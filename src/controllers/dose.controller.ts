@@ -187,6 +187,11 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       await dispenseMedication(inventoryLotId, treatment.patient.id, dose.id);
     }
 
+    // Update treatment startDate to match the latest applied dose date (D0 for message timeline)
+    if (status === 'APPLIED') {
+      await updateTreatmentStartDate(treatmentId);
+    }
+
     sendCreated(res, dose);
   } catch (error) {
     next(error);
@@ -300,6 +305,11 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       await dispenseMedication(lotId!, existingDose.treatment.patient.id, dose.id);
     }
 
+    // Update treatment startDate when dose is applied or application date changes
+    if (status === 'APPLIED' || (applicationDate !== undefined && existingDose.status === 'APPLIED')) {
+      await updateTreatmentStartDate(existingDose.treatmentId);
+    }
+
     sendSuccess(res, dose);
   } catch (error) {
     next(error);
@@ -365,4 +375,26 @@ async function dispenseMedication(inventoryLotId: string, patientId: string, dos
       },
     }),
   ]);
+}
+
+// Helper function to update treatment startDate based on latest applied dose
+// This ensures the message timeline (D0, D1, D30, D77, etc.) uses the correct reference date
+async function updateTreatmentStartDate(treatmentId: string) {
+  // Get the most recent applied dose for this treatment
+  const latestAppliedDose = await prisma.dose.findFirst({
+    where: {
+      treatmentId,
+      status: 'APPLIED',
+    },
+    orderBy: { applicationDate: 'desc' },
+    select: { applicationDate: true },
+  });
+
+  if (latestAppliedDose) {
+    // Update treatment startDate to match the latest applied dose date
+    await prisma.treatment.update({
+      where: { id: treatmentId },
+      data: { startDate: latestAppliedDose.applicationDate },
+    });
+  }
 }
