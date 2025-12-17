@@ -329,6 +329,11 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       await updateTreatmentStartDate(existingDose.treatmentId);
     }
 
+    // Check if treatment should be finished (all planned doses applied)
+    if (status === 'APPLIED') {
+      await checkAndFinishTreatment(existingDose.treatmentId);
+    }
+
     sendSuccess(res, dose);
   } catch (error) {
     next(error);
@@ -444,6 +449,43 @@ async function updateTreatmentStartDate(treatmentId: string) {
     await prisma.treatment.update({
       where: { id: treatmentId },
       data: { startDate: firstPendingDose.applicationDate },
+    });
+  }
+}
+
+// Helper function to check if all planned doses are applied and finish the treatment
+// When applied doses >= plannedDosesBeforeConsult, change status to FINISHED
+async function checkAndFinishTreatment(treatmentId: string) {
+  const treatment = await prisma.treatment.findUnique({
+    where: { id: treatmentId },
+    select: {
+      plannedDosesBeforeConsult: true,
+      status: true,
+    },
+  });
+
+  if (!treatment || treatment.status !== 'ONGOING') {
+    return; // Only check ongoing treatments
+  }
+
+  // If plannedDosesBeforeConsult is 0 or not set, don't auto-finish
+  if (!treatment.plannedDosesBeforeConsult || treatment.plannedDosesBeforeConsult <= 0) {
+    return;
+  }
+
+  // Count applied doses for this treatment
+  const appliedDosesCount = await prisma.dose.count({
+    where: {
+      treatmentId,
+      status: 'APPLIED',
+    },
+  });
+
+  // If applied doses >= planned doses, finish the treatment
+  if (appliedDosesCount >= treatment.plannedDosesBeforeConsult) {
+    await prisma.treatment.update({
+      where: { id: treatmentId },
+      data: { status: 'FINISHED' },
     });
   }
 }
