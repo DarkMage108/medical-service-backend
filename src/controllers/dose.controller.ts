@@ -145,6 +145,14 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
     }
 
     const appDate = new Date(applicationDate);
+
+    // Validate: Cannot mark as APPLIED if date is in the future
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (status === 'APPLIED' && appDate > today) {
+      throw new BadRequestError('Não é possível marcar como "Aplicada" uma dose com data futura. Use o status "Pendente" para agendamentos futuros.');
+    }
+
     const { calculatedNextDate, daysUntilNext } = calculateDoseLogic(
       appDate,
       treatment.protocol.frequencyDays
@@ -187,10 +195,8 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       await dispenseMedication(inventoryLotId, treatment.patient.id, dose.id);
     }
 
-    // Update treatment startDate to match the latest applied dose date (D0 for message timeline)
-    if (status === 'APPLIED') {
-      await updateTreatmentStartDate(treatmentId);
-    }
+    // Always update treatment startDate based on dose dates (for message timeline)
+    await updateTreatmentStartDate(treatmentId);
 
     sendCreated(res, dose);
   } catch (error) {
@@ -236,6 +242,18 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     }
 
     const updateData: any = {};
+
+    // Determine the application date to validate (new or existing)
+    const appDateToValidate = applicationDate !== undefined
+      ? new Date(applicationDate)
+      : existingDose.applicationDate;
+
+    // Validate: Cannot mark as APPLIED if date is in the future
+    const today = new Date();
+    today.setHours(23, 59, 59, 999);
+    if (status === 'APPLIED' && appDateToValidate > today) {
+      throw new BadRequestError('Não é possível marcar como "Aplicada" uma dose com data futura. Use o status "Pendente" para agendamentos futuros.');
+    }
 
     if (applicationDate !== undefined) {
       const appDate = new Date(applicationDate);
@@ -305,8 +323,9 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       await dispenseMedication(lotId!, existingDose.treatment.patient.id, dose.id);
     }
 
-    // Update treatment startDate when dose is applied or application date changes
-    if (status === 'APPLIED' || (applicationDate !== undefined && existingDose.status === 'APPLIED')) {
+    // Always update treatment startDate when dose date changes or status changes
+    // This ensures the timeline is always in sync with actual dose dates
+    if (applicationDate !== undefined || status !== undefined) {
       await updateTreatmentStartDate(existingDose.treatmentId);
     }
 
@@ -320,9 +339,20 @@ export const deleteDose = async (req: Request, res: Response, next: NextFunction
   try {
     const { id } = req.params;
 
+    // Get the dose first to know which treatment to update
+    const dose = await prisma.dose.findUnique({
+      where: { id },
+      select: { treatmentId: true },
+    });
+
     await prisma.dose.delete({
       where: { id },
     });
+
+    // Update treatment startDate after deletion
+    if (dose) {
+      await updateTreatmentStartDate(dose.treatmentId);
+    }
 
     sendNoContent(res);
   } catch (error) {
@@ -377,7 +407,8 @@ async function dispenseMedication(inventoryLotId: string, patientId: string, dos
   ]);
 }
 
-// Helper function to update treatment startDate based on latest applied dose
+// Helper function to update treatment startDate based on dose dates
+// Priority: 1) Latest APPLIED dose, 2) First PENDING dose
 // This ensures the message timeline (D0, D1, D30, D77, etc.) uses the correct reference date
 async function updateTreatmentStartDate(treatmentId: string) {
   // Get the most recent applied dose for this treatment
@@ -391,10 +422,28 @@ async function updateTreatmentStartDate(treatmentId: string) {
   });
 
   if (latestAppliedDose) {
-    // Update treatment startDate to match the latest applied dose date
+    // Use last applied dose date as reference
     await prisma.treatment.update({
       where: { id: treatmentId },
       data: { startDate: latestAppliedDose.applicationDate },
+    });
+    return;
+  }
+
+  // If no applied dose, use first pending dose
+  const firstPendingDose = await prisma.dose.findFirst({
+    where: {
+      treatmentId,
+      status: 'PENDING',
+    },
+    orderBy: { applicationDate: 'asc' },
+    select: { applicationDate: true },
+  });
+
+  if (firstPendingDose) {
+    await prisma.treatment.update({
+      where: { id: treatmentId },
+      data: { startDate: firstPendingDose.applicationDate },
     });
   }
 }
