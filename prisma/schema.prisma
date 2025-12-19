@@ -65,6 +65,12 @@ enum PurchaseRequestStatus {
   RECEIVED
 }
 
+enum PaymentMethod {
+  PIX
+  CARD
+  BOLETO
+}
+
 // ============== MODELS ==============
 
 model User {
@@ -100,6 +106,7 @@ model Patient {
   treatments       Treatment[]
   consentDocuments ConsentDocument[]
   dispenseLogs     DispenseLog[]
+  sales            Sale[]
 
   @@map("patients")
 }
@@ -236,6 +243,7 @@ model Dose {
   treatment     Treatment      @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem? @relation(fields: [inventoryLotId], references: [id])
   dispenseLogs  DispenseLog[]
+  sale          Sale?
 
   @@map("doses")
 }
@@ -252,9 +260,18 @@ model InventoryItem {
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
+  // Financial fields (defaults for CAIXA)
+  unitCost       Float?   @default(0)  // Custo unitário
+  baseSalePrice  Float?   @default(0)  // Preço de venda base
+  defaultCommission Float? @default(0) // Comissão padrão (R$)
+  defaultTax     Float?   @default(0)  // Impostos padrão (R$)
+  defaultDelivery Float?  @default(0)  // Entrega padrão (R$)
+  defaultOther   Float?   @default(0)  // Outros padrão (R$)
+
   // Relations
   doses        Dose[]
   dispenseLogs DispenseLog[]
+  sales        Sale[]
 
   @@unique([medicationName, lotNumber])
   @@map("inventory_items")
@@ -329,4 +346,36 @@ model RolePermission {
 
   @@unique([role, menuKey])
   @@map("role_permissions")
+}
+
+model Sale {
+  id              String        @id @default(cuid())
+  doseId          String        @unique  // One sale per dose
+  inventoryItemId String                 // Which lot was used
+  patientId       String                 // For easy querying
+
+  // Financial data
+  salePrice       Float                  // Preço de venda
+  unitCost        Float                  // Custo unitário (copied from lot at time of sale)
+  commission      Float         @default(0)  // Comissão (R$)
+  tax             Float         @default(0)  // Impostos (R$)
+  delivery        Float         @default(0)  // Entrega (R$)
+  other           Float         @default(0)  // Outros (R$)
+
+  // Calculated fields (stored for historical accuracy)
+  grossProfit     Float                  // salePrice - unitCost
+  netProfit       Float                  // grossProfit - commission - tax - delivery - other
+
+  paymentMethod   PaymentMethod
+  saleDate        DateTime      @default(now())
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  // Relations
+  dose          Dose          @relation(fields: [doseId], references: [id])
+  inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
+  patient       Patient       @relation(fields: [patientId], references: [id])
+
+  @@map("sales")
 }

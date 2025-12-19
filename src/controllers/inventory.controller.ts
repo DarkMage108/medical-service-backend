@@ -71,7 +71,11 @@ export const getInventoryItem = async (req: Request, res: Response, next: NextFu
 
 export const createInventoryItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { medicationName, lotNumber, expiryDate, quantity, unit } = req.body;
+    const {
+      medicationName, lotNumber, expiryDate, quantity, unit,
+      // Financial fields
+      unitCost, baseSalePrice, defaultCommission, defaultTax, defaultDelivery, defaultOther
+    } = req.body;
 
     if (!medicationName || !lotNumber || !expiryDate || !quantity) {
       throw new BadRequestError('Medication name, lot number, expiry date, and quantity are required');
@@ -93,6 +97,13 @@ export const createInventoryItem = async (req: Request, res: Response, next: Nex
         data: {
           quantity: { increment: quantity },
           active: true,
+          // Update financial fields if provided
+          ...(unitCost !== undefined && { unitCost }),
+          ...(baseSalePrice !== undefined && { baseSalePrice }),
+          ...(defaultCommission !== undefined && { defaultCommission }),
+          ...(defaultTax !== undefined && { defaultTax }),
+          ...(defaultDelivery !== undefined && { defaultDelivery }),
+          ...(defaultOther !== undefined && { defaultOther }),
         },
       });
       sendSuccess(res, updated);
@@ -106,6 +117,13 @@ export const createInventoryItem = async (req: Request, res: Response, next: Nex
         expiryDate: new Date(expiryDate),
         quantity,
         unit: unit || 'Ampola',
+        // Financial fields
+        unitCost: unitCost || 0,
+        baseSalePrice: baseSalePrice || 0,
+        defaultCommission: defaultCommission || 0,
+        defaultTax: defaultTax || 0,
+        defaultDelivery: defaultDelivery || 0,
+        defaultOther: defaultOther || 0,
       },
     });
 
@@ -118,7 +136,11 @@ export const createInventoryItem = async (req: Request, res: Response, next: Nex
 export const updateInventoryItem = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { medicationName, lotNumber, expiryDate, quantity, unit, active } = req.body;
+    const {
+      medicationName, lotNumber, expiryDate, quantity, unit, active,
+      // Financial fields
+      unitCost, baseSalePrice, defaultCommission, defaultTax, defaultDelivery, defaultOther
+    } = req.body;
 
     const item = await prisma.inventoryItem.update({
       where: { id },
@@ -129,6 +151,13 @@ export const updateInventoryItem = async (req: Request, res: Response, next: Nex
         ...(quantity !== undefined && { quantity }),
         ...(unit && { unit }),
         ...(active !== undefined && { active }),
+        // Financial fields
+        ...(unitCost !== undefined && { unitCost }),
+        ...(baseSalePrice !== undefined && { baseSalePrice }),
+        ...(defaultCommission !== undefined && { defaultCommission }),
+        ...(defaultTax !== undefined && { defaultTax }),
+        ...(defaultDelivery !== undefined && { defaultDelivery }),
+        ...(defaultOther !== undefined && { defaultOther }),
       },
     });
 
