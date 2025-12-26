@@ -190,8 +190,10 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       },
     });
 
-    // If dose is applied and has inventory lot, dispense medication
-    if (status === 'APPLIED' && inventoryLotId) {
+    // If dose is applied, has inventory lot, and was purchased, dispense medication
+    // purchased=false means patient brought their own medication, no inventory deduction
+    const shouldDispense = purchased !== false; // default true if not specified
+    if (status === 'APPLIED' && inventoryLotId && shouldDispense) {
       await dispenseMedication(inventoryLotId, treatment.patient.id, dose.id);
     }
 
@@ -314,10 +316,15 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     });
 
     // Handle inventory dispensing when status changes to APPLIED
+    // Only dispense if purchased=true (or not explicitly set to false)
+    // purchased=false means patient brought their own medication, no inventory deduction
+    const wasPurchased = purchased !== undefined ? purchased : existingDose.purchased;
+    const shouldDispense = wasPurchased !== false;
     if (
       status === 'APPLIED' &&
       existingDose.status !== 'APPLIED' &&
-      (inventoryLotId || existingDose.inventoryLotId)
+      (inventoryLotId || existingDose.inventoryLotId) &&
+      shouldDispense
     ) {
       const lotId = inventoryLotId || existingDose.inventoryLotId;
       await dispenseMedication(lotId!, existingDose.treatment.patient.id, dose.id);
