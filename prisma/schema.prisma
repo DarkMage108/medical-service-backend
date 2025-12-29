@@ -333,6 +333,13 @@ model DismissedLog {
   feedbackUrgency      String?
   feedbackStatus       String?  @default("pending")
 
+  // Manual registration fields
+  origin               String   @default("regua") // "regua" or "manual"
+  patientId            String?  // Required for manual entries
+  patientName          String?  // Stored for manual entries
+  patientPhone         String?  // Stored for manual entries
+  manualMessage        String?  // The message/context for manual entry
+
   @@map("dismissed_logs")
 }
 

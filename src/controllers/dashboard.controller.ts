@@ -184,6 +184,42 @@ export const dismissContact = async (req: Request, res: Response, next: NextFunc
         feedbackNeedsMedical: feedback?.needsMedicalResponse || null,
         feedbackUrgency: feedback?.urgency || null,
         feedbackStatus: feedback?.text ? 'pending' : null,
+        origin: 'regua',
+      },
+    });
+
+    sendCreated(res, dismissed);
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Create manual contact registration (not from regua)
+export const createManualContact = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { patientId, patientName, patientPhone, message, feedback } = req.body;
+
+    if (!patientId || !patientName) {
+      return res.status(400).json({ error: 'Patient ID and name are required' });
+    }
+
+    // Generate unique contactId for manual entries
+    const timestamp = Date.now();
+    const contactId = `manual_${patientId}_${timestamp}`;
+
+    const dismissed = await prisma.dismissedLog.create({
+      data: {
+        contactId,
+        origin: 'manual',
+        patientId,
+        patientName,
+        patientPhone: patientPhone || null,
+        manualMessage: message || null,
+        feedbackText: feedback?.text || null,
+        feedbackClassification: feedback?.classification || null,
+        feedbackNeedsMedical: feedback?.needsMedicalResponse || null,
+        feedbackUrgency: feedback?.urgency || null,
+        feedbackStatus: feedback?.text ? 'pending' : null,
       },
     });
 
