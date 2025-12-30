@@ -190,10 +190,10 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       },
     });
 
-    // If dose is applied, has inventory lot, and was purchased, dispense medication
+    // Dispense medication from inventory when purchased=true (regardless of dose status)
     // purchased=false means patient brought their own medication, no inventory deduction
     const shouldDispense = purchased !== false; // default true if not specified
-    if (status === 'APPLIED' && inventoryLotId && shouldDispense) {
+    if (inventoryLotId && shouldDispense) {
       await dispenseMedication(inventoryLotId, treatment.patient.id, dose.id);
     }
 
@@ -315,19 +315,24 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       },
     });
 
-    // Handle inventory dispensing when status changes to APPLIED
-    // Only dispense if purchased=true (or not explicitly set to false)
+    // Handle inventory dispensing when purchased changes to true
     // purchased=false means patient brought their own medication, no inventory deduction
     const wasPurchased = purchased !== undefined ? purchased : existingDose.purchased;
-    const shouldDispense = wasPurchased !== false;
-    if (
-      status === 'APPLIED' &&
-      existingDose.status !== 'APPLIED' &&
-      (inventoryLotId || existingDose.inventoryLotId) &&
-      shouldDispense
-    ) {
-      const lotId = inventoryLotId || existingDose.inventoryLotId;
-      await dispenseMedication(lotId!, existingDose.treatment.patient.id, dose.id);
+    const wasNotPurchasedBefore = existingDose.purchased === false;
+    const isNowPurchased = wasPurchased !== false;
+    const lotId = inventoryLotId || existingDose.inventoryLotId;
+
+    // Dispense if: purchased is now true AND either:
+    // 1. It's a new inventory lot being assigned, OR
+    // 2. purchased changed from false to true (and there's already a lot)
+    if (lotId && isNowPurchased) {
+      // Only dispense if this is a new purchase action (wasn't purchased before, or new lot assigned)
+      const newLotAssigned = inventoryLotId && inventoryLotId !== existingDose.inventoryLotId;
+      const purchaseStatusChanged = wasNotPurchasedBefore && purchased === true;
+
+      if (newLotAssigned || purchaseStatusChanged) {
+        await dispenseMedication(lotId, existingDose.treatment.patient.id, dose.id);
+      }
     }
 
     // Always update treatment startDate when dose date changes or status changes
