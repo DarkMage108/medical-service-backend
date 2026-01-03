@@ -24,6 +24,7 @@ import dashboardRoutes from './routes/dashboard.routes.js';
 import dispenseLogRoutes from './routes/dispenseLog.routes.js';
 import permissionRoutes from './routes/permission.routes.js';
 import salesRoutes from './routes/sales.routes.js';
+import patientEventRoutes from './routes/patientEvent.routes.js';
 
 dotenv.config();
 
@@ -95,6 +96,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/dispense-logs', dispenseLogRoutes);
 app.use('/api/permissions', permissionRoutes);
 app.use('/api/sales', salesRoutes);
+app.use('/api', patientEventRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

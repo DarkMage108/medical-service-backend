@@ -107,6 +107,7 @@ model Patient {
   consentDocuments ConsentDocument[]
   dispenseLogs     DispenseLog[]
   sales            Sale[]
+  events           PatientEvent[]
 
   @@map("patients")
 }
@@ -385,4 +386,19 @@ model Sale {
   patient       Patient       @relation(fields: [patientId], references: [id])
 
   @@map("sales")
+}
+
+model PatientEvent {
+  id          String   @id @default(cuid())
+  patientId   String
+  title       String
+  eventDate   DateTime
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("patient_events")
 }
