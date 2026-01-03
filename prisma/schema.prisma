@@ -290,7 +290,7 @@ model DispenseLog {
   // Relations
   patient       Patient       @relation(fields: [patientId], references: [id])
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
-  dose          Dose?         @relation(fields: [doseId], references: [id])
+  dose          Dose?         @relation(fields: [doseId], references: [id], onDelete: SetNull)
 
   @@map("dispense_logs")
 }
@@ -381,7 +381,7 @@ model Sale {
   updatedAt       DateTime      @updatedAt
 
   // Relations
-  dose          Dose          @relation(fields: [doseId], references: [id])
+  dose          Dose          @relation(fields: [doseId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem @relation(fields: [inventoryItemId], references: [id])
   patient       Patient       @relation(fields: [patientId], references: [id])
 
