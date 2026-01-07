@@ -230,6 +230,8 @@ model Dose {
   consultationDate     DateTime?
   paymentStatus        PaymentStatus @default(WAITING_PIX)
   paymentUpdatedAt     DateTime      @default(now())
+  paymentMethod        PaymentMethod?
+  paymentDate          DateTime?
   nurse                Boolean       @default(false)
   surveyStatus         SurveyStatus  @default(NOT_SENT)
   surveyScore          Int?
