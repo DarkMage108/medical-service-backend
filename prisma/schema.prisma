@@ -44,7 +44,6 @@ enum PaymentStatus {
   WAITING_CARD
   WAITING_BOLETO
   PAID
-  WAITING_DELIVERY
 }
 
 enum SurveyStatus {

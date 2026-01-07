@@ -34,7 +34,7 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
       prisma.dose.count({
         where: {
           paymentStatus: {
-            in: ['WAITING_PIX', 'WAITING_CARD', 'WAITING_BOLETO', 'WAITING_DELIVERY'],
+            in: ['WAITING_PIX', 'WAITING_CARD', 'WAITING_BOLETO'],
           },
         },
       }),
