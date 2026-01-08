@@ -16,7 +16,7 @@ export const MENU_ITEMS = [
   { key: 'checklist', label: 'Checklist', path: '/checklist' },
   { key: 'nursing', label: 'Enfermagem', path: '/enfermagem' },
   { key: 'patients', label: 'Pacientes', path: '/pacientes' },
-  { key: 'history', label: 'Histórico', path: '/historico' },
+  { key: 'history', label: 'Central de Mensagens', path: '/historico' },
   { key: 'inventory', label: 'Estoque', path: '/estoque' },
   { key: 'cashregister', label: 'CAIXA', path: '/caixa' },
   { key: 'diagnoses', label: 'Diagnósticos', path: '/diagnosticos' },
