@@ -236,6 +236,7 @@ model Dose {
   surveyStatus         SurveyStatus  @default(NOT_SENT)
   surveyScore          Int?
   surveyComment        String?
+  clinicalObservations String?
   inventoryLotId       String?
   purchased            Boolean       @default(true)
   deliveryStatus       String?
