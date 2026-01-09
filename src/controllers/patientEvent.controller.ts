@@ -3,6 +3,54 @@ import prisma from '../utils/prisma.js';
 import { NotFoundError, BadRequestError } from '../utils/errors.js';
 import { sendSuccess, sendPaginated, sendCreated, sendNoContent } from '../utils/response.js';
 
+// Get all events (for dashboard - all patients)
+export const getAllPatientEvents = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const { fromDate, toDate, page = '1', limit = '100' } = req.query;
+
+    const pageNum = parseInt(page as string, 10);
+    const limitNum = Math.min(parseInt(limit as string, 10), 500);
+    const skip = (pageNum - 1) * limitNum;
+
+    const where: any = {};
+
+    if (fromDate) {
+      where.eventDate = { ...where.eventDate, gte: new Date(fromDate as string) };
+    }
+    if (toDate) {
+      where.eventDate = { ...where.eventDate, lte: new Date(toDate as string) };
+    }
+
+    const [events, total] = await Promise.all([
+      prisma.patientEvent.findMany({
+        where,
+        skip,
+        take: limitNum,
+        orderBy: { eventDate: 'asc' },
+        include: {
+          patient: {
+            select: {
+              id: true,
+              fullName: true,
+              guardian: true,
+            },
+          },
+        },
+      }),
+      prisma.patientEvent.count({ where }),
+    ]);
+
+    sendPaginated(res, events, {
+      total,
+      page: pageNum,
+      limit: limitNum,
+      totalPages: Math.ceil(total / limitNum),
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Get all events for a patient
 export const getPatientEvents = async (req: Request, res: Response, next: NextFunction) => {
   try {

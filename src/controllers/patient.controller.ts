@@ -62,68 +62,55 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       prisma.patient.count({ where }),
     ]);
 
-    // Calculate adherence level for each patient
+    // Calculate adherence level for each patient based on scheduled doses
+    // Rules: Sem atraso = BOA, <30 dias de atraso = ATRASADO, >30 dias de atraso = ABANDONO
     const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
     const patientsWithAdherence = patients.map((patient: any) => {
       let adherenceLevel: string | null = null;
 
       if (patient.treatments && patient.treatments.length > 0) {
-        // Aggregate metrics across all treatments
-        let totalMissed = 0;
-        let totalSignificantDelays = 0;
-        let maxDaysSinceLast = 0;
+        let maxDelayDays = 0;
         let hasOngoingTreatment = false;
 
         patient.treatments.forEach((treatment: any) => {
           if (treatment.status === 'ONGOING') {
             hasOngoingTreatment = true;
             const doses = treatment.doses || [];
-            const frequencyDays = treatment.protocol?.frequencyDays || 28;
 
-            let lastApplicationDate: Date | null = null;
+            // Find the first PENDING dose (next scheduled dose)
+            const sortedDoses = [...doses].sort((a: any, b: any) =>
+              new Date(a.applicationDate).getTime() - new Date(b.applicationDate).getTime()
+            );
+            const firstPendingDose = sortedDoses.find((d: any) => d.status === 'PENDING');
 
-            doses.forEach((dose: any, index: number) => {
-              if (dose.status === 'NOT_ACCEPTED') {
-                totalMissed++;
-              }
+            if (firstPendingDose) {
+              // Parse scheduled date correctly to avoid timezone issues
+              const dateStr = firstPendingDose.applicationDate.toISOString ?
+                firstPendingDose.applicationDate.toISOString() :
+                firstPendingDose.applicationDate;
+              const dateOnly = dateStr.split('T')[0];
+              const [year, month, day] = dateOnly.split('-').map(Number);
+              const scheduledDate = new Date(year, month - 1, day);
 
-              if (dose.status === 'APPLIED' && index > 0) {
-                const prevDose = doses[index - 1];
-                if (prevDose.status === 'APPLIED') {
-                  const prevDate = new Date(prevDose.applicationDate);
-                  const expectedDate = new Date(prevDate);
-                  expectedDate.setDate(expectedDate.getDate() + frequencyDays);
-                  const actualDate = new Date(dose.applicationDate);
-                  const delayDays = Math.max(0, Math.floor((actualDate.getTime() - expectedDate.getTime()) / (1000 * 60 * 60 * 24)));
-                  if (delayDays > 3) {
-                    totalSignificantDelays++;
-                  }
-                }
-              }
+              // Calculate delay: positive if past scheduled date, negative/zero if not yet due
+              const delayDays = Math.floor((today.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24));
 
-              if (dose.status === 'APPLIED') {
-                lastApplicationDate = new Date(dose.applicationDate);
-              }
-            });
-
-            if (lastApplicationDate !== null) {
-              const lastDate = lastApplicationDate as Date;
-              const daysSinceLast = Math.floor((today.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
-              if (daysSinceLast > maxDaysSinceLast) {
-                maxDaysSinceLast = daysSinceLast;
+              // Only count positive delays (when scheduled date has passed)
+              if (delayDays > maxDelayDays) {
+                maxDelayDays = delayDays;
               }
             }
           }
         });
 
-        // Classify adherence
+        // Classify adherence based on delay from scheduled doses
         if (hasOngoingTreatment) {
-          if (maxDaysSinceLast > 30) {
+          if (maxDelayDays > 30) {
             adherenceLevel = 'ABANDONO';
-          } else if (totalMissed > 3 || totalSignificantDelays > 3) {
-            adherenceLevel = 'BAIXA';
-          } else if (totalSignificantDelays > 0 || totalMissed > 0) {
-            adherenceLevel = 'MODERADA';
+          } else if (maxDelayDays > 0) {
+            adherenceLevel = 'ATRASADO';
           } else {
             adherenceLevel = 'BOA';
           }
@@ -232,7 +219,9 @@ export const createPatient = async (req: Request, res: Response, next: NextFunct
             create: {
               street: address.street,
               number: address.number,
-              complement: address.complement,
+              complement: address.complement || null,
+              condominium: address.condominium || null,
+              referencePoint: address.referencePoint || null,
               neighborhood: address.neighborhood,
               city: address.city,
               state: address.state,
@@ -384,7 +373,7 @@ export const getAddress = async (req: Request, res: Response, next: NextFunction
 export const upsertAddress = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { patientId } = req.params;
-    const { street, number, complement, neighborhood, city, state, zipCode } = req.body;
+    const { street, number, complement, condominium, referencePoint, neighborhood, city, state, zipCode } = req.body;
 
     if (!street || !number || !neighborhood || !city || !state || !zipCode) {
       throw new BadRequestError('All address fields are required');
@@ -395,7 +384,9 @@ export const upsertAddress = async (req: Request, res: Response, next: NextFunct
       update: {
         street,
         number,
-        complement,
+        complement: complement || null,
+        condominium: condominium || null,
+        referencePoint: referencePoint || null,
         neighborhood,
         city,
         state,
@@ -405,7 +396,9 @@ export const upsertAddress = async (req: Request, res: Response, next: NextFunct
         patientId,
         street,
         number,
-        complement,
+        complement: complement || null,
+        condominium: condominium || null,
+        referencePoint: referencePoint || null,
         neighborhood,
         city,
         state,

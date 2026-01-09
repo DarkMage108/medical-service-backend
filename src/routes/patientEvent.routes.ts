@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authenticate } from '../middleware/auth.js';
 import {
+  getAllPatientEvents,
   getPatientEvents,
   createPatientEvent,
   updatePatientEvent,
@@ -11,6 +12,9 @@ const router = Router();
 
 // All routes require authentication
 router.use(authenticate);
+
+// GET /api/patient-events - Get all events (for dashboard)
+router.get('/patient-events', getAllPatientEvents);
 
 // GET /api/patients/:patientId/events - Get all events for a patient
 router.get('/patients/:patientId/events', getPatientEvents);

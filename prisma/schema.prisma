@@ -128,15 +128,17 @@ model Guardian {
 }
 
 model Address {
-  id           String  @id @default(cuid())
-  patientId    String  @unique
-  street       String
-  number       String
-  complement   String?
-  neighborhood String
-  city         String
-  state        String
-  zipCode      String
+  id             String  @id @default(cuid())
+  patientId      String  @unique
+  street         String
+  number         String
+  complement     String?
+  condominium    String?
+  referencePoint String?
+  neighborhood   String
+  city           String
+  state          String
+  zipCode        String
 
   // Relations
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
