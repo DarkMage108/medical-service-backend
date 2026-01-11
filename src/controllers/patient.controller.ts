@@ -73,11 +73,21 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       if (patient.treatments && patient.treatments.length > 0) {
         let maxDelayDays = 0;
         let hasOngoingTreatment = false;
+        let hasPendingDose = false;
 
         patient.treatments.forEach((treatment: any) => {
           if (treatment.status === 'ONGOING') {
             hasOngoingTreatment = true;
             const doses = treatment.doses || [];
+
+            // Count applied doses vs planned doses
+            const appliedCount = doses.filter((d: any) => d.status === 'APPLIED').length;
+            const plannedCount = treatment.plannedDosesBeforeConsult || 0;
+
+            // If all planned doses are applied, treatment is complete - no delay
+            if (plannedCount > 0 && appliedCount >= plannedCount) {
+              return; // This treatment is complete, skip delay calculation
+            }
 
             // Find the first PENDING dose (next scheduled dose)
             const sortedDoses = [...doses].sort((a: any, b: any) =>
@@ -86,6 +96,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
             const firstPendingDose = sortedDoses.find((d: any) => d.status === 'PENDING');
 
             if (firstPendingDose) {
+              hasPendingDose = true;
               // Parse scheduled date correctly to avoid timezone issues
               const dateStr = firstPendingDose.applicationDate.toISOString ?
                 firstPendingDose.applicationDate.toISOString() :
@@ -107,7 +118,10 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
 
         // Classify adherence based on delay from scheduled doses
         if (hasOngoingTreatment) {
-          if (maxDelayDays > 30) {
+          // If no pending doses and all treatments have completed their planned doses, it's good adherence
+          if (!hasPendingDose) {
+            adherenceLevel = 'BOA';
+          } else if (maxDelayDays > 30) {
             adherenceLevel = 'ABANDONO';
           } else if (maxDelayDays > 0) {
             adherenceLevel = 'ATRASADO';

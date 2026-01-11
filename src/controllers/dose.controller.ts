@@ -119,6 +119,8 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       isLastBeforeConsult,
       consultationDate,
       paymentStatus,
+      paymentMethod,
+      paymentDate,
       nurse,
       purchased,
       deliveryStatus,
@@ -172,6 +174,8 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
         isLastBeforeConsult: isLastBeforeConsult || false,
         consultationDate: consultationDate ? new Date(consultationDate) : null,
         paymentStatus: paymentStatus || 'WAITING_PIX',
+        paymentMethod: paymentMethod || null,
+        paymentDate: paymentDate ? new Date(paymentDate) : null,
         nurse: nurse || false,
         surveyStatus: surveyStatus || (nurse ? 'WAITING' : 'NOT_SENT'),
         surveyScore: surveyScore || null,
@@ -200,6 +204,11 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
     // Always update treatment startDate based on dose dates (for message timeline)
     await updateTreatmentStartDate(treatmentId);
 
+    // Auto-create Sale record when paymentDate is set (for CAIXA module)
+    if (paymentDate && paymentMethod) {
+      await createOrUpdateSaleFromDose(dose.id, treatment.patient.id, paymentMethod, new Date(paymentDate));
+    }
+
     sendCreated(res, dose);
   } catch (error) {
     next(error);
@@ -218,6 +227,8 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       isLastBeforeConsult,
       consultationDate,
       paymentStatus,
+      paymentMethod,
+      paymentDate,
       nurse,
       surveyStatus,
       surveyScore,
@@ -279,6 +290,12 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     if (paymentStatus !== undefined) {
       updateData.paymentStatus = paymentStatus;
       updateData.paymentUpdatedAt = new Date();
+    }
+    if (paymentMethod !== undefined) {
+      updateData.paymentMethod = paymentMethod || null;
+    }
+    if (paymentDate !== undefined) {
+      updateData.paymentDate = paymentDate ? new Date(paymentDate) : null;
     }
 
     // Handle nurse and survey status logic
@@ -344,6 +361,11 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     // Check if treatment should be finished (all planned doses applied)
     if (status === 'APPLIED') {
       await checkAndFinishTreatment(existingDose.treatmentId);
+    }
+
+    // Auto-create/update Sale record when paymentDate is set (for CAIXA module)
+    if (paymentDate && paymentMethod) {
+      await createOrUpdateSaleFromDose(dose.id, existingDose.treatment.patient.id, paymentMethod, new Date(paymentDate));
     }
 
     sendSuccess(res, dose);
@@ -498,6 +520,70 @@ async function checkAndFinishTreatment(treatmentId: string) {
     await prisma.treatment.update({
       where: { id: treatmentId },
       data: { status: 'FINISHED' },
+    });
+  }
+}
+
+// Helper function to auto-create/update Sale record when dose has financial data
+// This makes the sale appear in the CAIXA module
+async function createOrUpdateSaleFromDose(
+  doseId: string,
+  patientId: string,
+  paymentMethod: string,
+  saleDate: Date
+) {
+  // Get the dose with inventory info
+  const dose = await prisma.dose.findUnique({
+    where: { id: doseId },
+    include: {
+      inventoryItem: true,
+      sale: true,
+    },
+  });
+
+  if (!dose) return;
+
+  // Get default values from inventory item if available
+  const inventoryItem = dose.inventoryItem;
+  const unitCost = inventoryItem?.unitCost || 0;
+  const salePrice = inventoryItem?.baseSalePrice || 0;
+  const commission = inventoryItem?.defaultCommission || 0;
+  const tax = inventoryItem?.defaultTax || 0;
+  const delivery = inventoryItem?.defaultDelivery || 0;
+  const other = inventoryItem?.defaultOther || 0;
+
+  // Calculate profits
+  const grossProfit = salePrice - unitCost;
+  const opex = commission + tax + delivery + other;
+  const netProfit = grossProfit - opex;
+
+  if (dose.sale) {
+    // Update existing sale
+    await prisma.sale.update({
+      where: { id: dose.sale.id },
+      data: {
+        paymentMethod,
+        saleDate,
+      },
+    });
+  } else {
+    // Create new sale
+    await prisma.sale.create({
+      data: {
+        doseId,
+        inventoryItemId: dose.inventoryLotId,
+        patientId,
+        salePrice,
+        unitCost,
+        commission,
+        tax,
+        delivery,
+        other,
+        grossProfit,
+        netProfit,
+        paymentMethod,
+        saleDate,
+      },
     });
   }
 }
