@@ -567,12 +567,12 @@ async function createOrUpdateSaleFromDose(
         saleDate,
       },
     });
-  } else {
-    // Create new sale - inventoryItemId is optional
+  } else if (dose.inventoryLotId) {
+    // Create new sale only if inventoryLotId exists (required field)
     await prisma.sale.create({
       data: {
         doseId,
-        inventoryItemId: dose.inventoryLotId || undefined,
+        inventoryItemId: dose.inventoryLotId,
         patientId,
         salePrice,
         unitCost,
@@ -587,4 +587,5 @@ async function createOrUpdateSaleFromDose(
       },
     });
   }
+  // If no inventoryLotId and no existing sale, skip creating sale record
 }
