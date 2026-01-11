@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma.js';
 import { NotFoundError, BadRequestError } from '../utils/errors.js';
 import { sendSuccess, sendPaginated, sendCreated, sendNoContent } from '../utils/response.js';
+import { PaymentMethod } from '@prisma/client';
 
 // Helper function to calculate dose logic
 const calculateDoseLogic = (applicationDate: Date, frequencyDays: number) => {
@@ -206,7 +207,7 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
 
     // Auto-create Sale record when paymentDate is set (for CAIXA module)
     if (paymentDate && paymentMethod) {
-      await createOrUpdateSaleFromDose(dose.id, treatment.patient.id, paymentMethod, new Date(paymentDate));
+      await createOrUpdateSaleFromDose(dose.id, treatment.patient.id, paymentMethod as PaymentMethod, new Date(paymentDate));
     }
 
     sendCreated(res, dose);
@@ -365,7 +366,7 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
 
     // Auto-create/update Sale record when paymentDate is set (for CAIXA module)
     if (paymentDate && paymentMethod) {
-      await createOrUpdateSaleFromDose(dose.id, existingDose.treatment.patient.id, paymentMethod, new Date(paymentDate));
+      await createOrUpdateSaleFromDose(dose.id, existingDose.treatment.patient.id, paymentMethod as PaymentMethod, new Date(paymentDate));
     }
 
     sendSuccess(res, dose);
@@ -529,7 +530,7 @@ async function checkAndFinishTreatment(treatmentId: string) {
 async function createOrUpdateSaleFromDose(
   doseId: string,
   patientId: string,
-  paymentMethod: string,
+  paymentMethod: PaymentMethod,
   saleDate: Date
 ) {
   // Get the dose with inventory info
@@ -567,11 +568,11 @@ async function createOrUpdateSaleFromDose(
       },
     });
   } else {
-    // Create new sale
+    // Create new sale - inventoryItemId is optional
     await prisma.sale.create({
       data: {
         doseId,
-        inventoryItemId: dose.inventoryLotId,
+        inventoryItemId: dose.inventoryLotId || undefined,
         patientId,
         salePrice,
         unitCost,
