@@ -50,7 +50,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
               protocol: { select: { frequencyDays: true } },
               doses: {
                 orderBy: { applicationDate: 'asc' },
-                select: { status: true, applicationDate: true },
+                select: { status: true, applicationDate: true, cycleNumber: true },
               },
             },
           },
@@ -62,8 +62,10 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       prisma.patient.count({ where }),
     ]);
 
-    // Calculate adherence level for each patient based on scheduled doses
+    // Calculate adherence level for each patient based on SCHEDULED doses from protocol
     // Rules: Sem atraso = BOA, <30 dias de atraso = ATRASADO, >30 dias de atraso = ABANDONO
+    // IMPORTANT: Delay is calculated from SCHEDULED date (startDate + frequencyDays * cycleNumber)
+    // NOT from the date the dose was added in the system
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -73,12 +75,21 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       if (patient.treatments && patient.treatments.length > 0) {
         let maxDelayDays = 0;
         let hasOngoingTreatment = false;
-        let hasPendingDose = false;
+        let hasOverdueDose = false;
 
         patient.treatments.forEach((treatment: any) => {
           if (treatment.status === 'ONGOING') {
             hasOngoingTreatment = true;
             const doses = treatment.doses || [];
+            const frequencyDays = treatment.protocol?.frequencyDays || 28;
+
+            // Parse start date correctly to avoid timezone issues
+            const startDateStr = treatment.startDate.toISOString ?
+              treatment.startDate.toISOString() :
+              treatment.startDate;
+            const startDateOnly = startDateStr.split('T')[0];
+            const [startYear, startMonth, startDay] = startDateOnly.split('-').map(Number);
+            const startDate = new Date(startYear, startMonth - 1, startDay);
 
             // Count applied doses vs planned doses
             const appliedCount = doses.filter((d: any) => d.status === 'APPLIED').length;
@@ -89,37 +100,41 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
               return; // This treatment is complete, skip delay calculation
             }
 
-            // Find the first PENDING dose (next scheduled dose)
-            const sortedDoses = [...doses].sort((a: any, b: any) =>
-              new Date(a.applicationDate).getTime() - new Date(b.applicationDate).getTime()
-            );
-            const firstPendingDose = sortedDoses.find((d: any) => d.status === 'PENDING');
+            // Check each planned dose based on SCHEDULED date from protocol
+            for (let i = 0; i < plannedCount; i++) {
+              const cycleNumber = i + 1;
 
-            if (firstPendingDose) {
-              hasPendingDose = true;
-              // Parse scheduled date correctly to avoid timezone issues
-              const dateStr = firstPendingDose.applicationDate.toISOString ?
-                firstPendingDose.applicationDate.toISOString() :
-                firstPendingDose.applicationDate;
-              const dateOnly = dateStr.split('T')[0];
-              const [year, month, day] = dateOnly.split('-').map(Number);
-              const scheduledDate = new Date(year, month - 1, day);
+              // Calculate SCHEDULED date: Dose 1 = startDate, Dose 2 = startDate + frequencyDays, etc.
+              const scheduledDate = new Date(startDate);
+              if (i > 0) {
+                scheduledDate.setDate(scheduledDate.getDate() + frequencyDays * i);
+              }
 
-              // Calculate delay: positive if past scheduled date, negative/zero if not yet due
-              const delayDays = Math.floor((today.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24));
+              // Check if scheduled date has passed
+              const daysUntilScheduled = Math.floor((scheduledDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
 
-              // Only count positive delays (when scheduled date has passed)
-              if (delayDays > maxDelayDays) {
-                maxDelayDays = delayDays;
+              if (daysUntilScheduled < 0) {
+                // Scheduled date has passed - check if dose was applied
+                const existingDose = doses.find((d: any) => d.cycleNumber === cycleNumber);
+
+                if (!existingDose || existingDose.status !== 'APPLIED') {
+                  // This dose is overdue
+                  hasOverdueDose = true;
+                  const delayDays = Math.abs(daysUntilScheduled);
+
+                  if (delayDays > maxDelayDays) {
+                    maxDelayDays = delayDays;
+                  }
+                  break; // Only count the first overdue dose per treatment
+                }
               }
             }
           }
         });
 
-        // Classify adherence based on delay from scheduled doses
+        // Classify adherence based on delay from SCHEDULED doses
         if (hasOngoingTreatment) {
-          // If no pending doses and all treatments have completed their planned doses, it's good adherence
-          if (!hasPendingDose) {
+          if (!hasOverdueDose) {
             adherenceLevel = 'BOA';
           } else if (maxDelayDays > 30) {
             adherenceLevel = 'ABANDONO';
