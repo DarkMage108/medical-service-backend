@@ -474,18 +474,24 @@ export const getDocuments = async (req: Request, res: Response, next: NextFuncti
 export const uploadDocument = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { patientId } = req.params;
-    const { fileName, fileType, fileUrl } = req.body;
+    const { fileName, fileType, fileUrl, status } = req.body;
 
-    if (!fileName || !fileType || !fileUrl) {
-      throw new BadRequestError('File name, type, and URL are required');
+    // Allow creating a document with just a status (SIGNED/REFUSED) without file
+    // Or with a file (fileName, fileType, fileUrl required together)
+    const hasFile = fileName && fileType && fileUrl;
+    const hasStatus = status && (status === 'SIGNED' || status === 'REFUSED');
+
+    if (!hasFile && !hasStatus) {
+      throw new BadRequestError('Either file (name, type, URL) or status (SIGNED/REFUSED) is required');
     }
 
     const document = await prisma.consentDocument.create({
       data: {
         patientId,
-        fileName,
-        fileType,
-        fileUrl,
+        fileName: fileName || null,
+        fileType: fileType || null,
+        fileUrl: fileUrl || null,
+        status: status || 'PENDING',
         uploadedBy: req.user!.id,
       },
     });

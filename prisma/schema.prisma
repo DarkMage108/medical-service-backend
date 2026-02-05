@@ -51,6 +51,7 @@ enum SurveyStatus {
   SENT
   ANSWERED
   NOT_SENT
+  NOT_ANSWERED
 }
 
 enum ProtocolCategory {
@@ -230,6 +231,7 @@ model Dose {
   daysUntilNext        Int?
   isLastBeforeConsult  Boolean       @default(false)
   consultationDate     DateTime?
+  consultationScheduled Boolean      @default(false)
   paymentStatus        PaymentStatus @default(WAITING_PIX)
   paymentUpdatedAt     DateTime      @default(now())
   paymentMethod        PaymentMethod?
