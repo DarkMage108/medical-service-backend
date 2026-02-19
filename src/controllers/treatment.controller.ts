@@ -316,10 +316,10 @@ export const getAdherenceReport = async (req: Request, res: Response, next: Next
         return;
       }
 
-      if (dose.status === 'APPLIED' && index > 0) {
+      if ((dose.status === 'APPLIED' || dose.status === 'APPLIED_LATE') && index > 0) {
         // Calculate expected date based on previous dose
         const prevDose = doses[index - 1];
-        if (prevDose.status === 'APPLIED') {
+        if ((prevDose.status === 'APPLIED' || prevDose.status === 'APPLIED_LATE')) {
           const prevDate = new Date(prevDose.applicationDate);
           const expectedDate = new Date(prevDate);
           expectedDate.setDate(expectedDate.getDate() + frequencyDays);
@@ -337,7 +337,7 @@ export const getAdherenceReport = async (req: Request, res: Response, next: Next
         }
       }
 
-      if (dose.status === 'APPLIED') {
+      if ((dose.status === 'APPLIED' || dose.status === 'APPLIED_LATE')) {
         lastApplicationDate = new Date(dose.applicationDate);
       }
     });
@@ -367,7 +367,7 @@ export const getAdherenceReport = async (req: Request, res: Response, next: Next
 
     const treatmentStatus = treatment.status;
     const totalDoses = doses.length;
-    const appliedDoses = doses.filter((d: any) => d.status === 'APPLIED').length;
+    const appliedDoses = doses.filter((d: any) => (d.status === 'APPLIED' || d.status === 'APPLIED_LATE')).length;
 
     if (treatmentStatus === 'REFUSED' || treatmentStatus === 'SUSPENDED') {
       adherenceClassification = 'Abandono confirmado';
@@ -396,9 +396,9 @@ export const getAdherenceReport = async (req: Request, res: Response, next: Next
     // Generate dose details for report
     const doseDetails: string[] = [];
     doses.forEach((dose: any, index: number) => {
-      if (dose.status === 'APPLIED' && index > 0) {
+      if ((dose.status === 'APPLIED' || dose.status === 'APPLIED_LATE') && index > 0) {
         const prevDose = doses[index - 1];
-        if (prevDose.status === 'APPLIED') {
+        if ((prevDose.status === 'APPLIED' || prevDose.status === 'APPLIED_LATE')) {
           const prevDate = new Date(prevDose.applicationDate);
           const expectedDate = new Date(prevDate);
           expectedDate.setDate(expectedDate.getDate() + frequencyDays);

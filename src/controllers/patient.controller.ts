@@ -92,7 +92,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
             const startDate = new Date(startYear, startMonth - 1, startDay);
 
             // Count applied doses vs planned doses
-            const appliedCount = doses.filter((d: any) => d.status === 'APPLIED').length;
+            const appliedCount = doses.filter((d: any) => d.status === 'APPLIED' || d.status === 'APPLIED_LATE').length;
             const plannedCount = treatment.plannedDosesBeforeConsult || 0;
 
             // If all planned doses are applied, treatment is complete - no delay
@@ -117,7 +117,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
                 // Scheduled date has passed - check if dose was applied
                 const existingDose = doses.find((d: any) => d.cycleNumber === cycleNumber);
 
-                if (!existingDose || existingDose.status !== 'APPLIED') {
+                if (!existingDose || (existingDose.status !== 'APPLIED' && existingDose.status !== 'APPLIED_LATE')) {
                   // This dose is overdue
                   hasOverdueDose = true;
                   const delayDays = Math.abs(daysUntilScheduled);
@@ -194,7 +194,21 @@ export const getPatient = async (req: Request, res: Response, next: NextFunction
       throw new NotFoundError('Patient not found');
     }
 
-    sendSuccess(res, patient);
+    // Calculate late dose counters
+    const lateDoses = await prisma.dose.findMany({
+      where: {
+        treatment: { patientId: id },
+        status: 'APPLIED_LATE',
+      },
+    });
+
+    const lateApplicationCount = lateDoses.length;
+    const totalDelayDays = lateDoses.reduce((sum: number, d: any) => {
+      const diff = Math.floor((d.applicationDate.getTime() - d.scheduledDate.getTime()) / (1000 * 60 * 60 * 24));
+      return sum + Math.max(0, diff);
+    }, 0);
+
+    sendSuccess(res, { ...patient, lateApplicationCount, totalDelayDays });
   } catch (error) {
     next(error);
   }

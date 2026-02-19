@@ -36,6 +36,7 @@ enum TreatmentStatus {
 enum DoseStatus {
   PENDING
   APPLIED
+  APPLIED_LATE
   NOT_ACCEPTED
 }
 
@@ -223,6 +224,7 @@ model Dose {
   id                   String        @id @default(cuid())
   treatmentId          String
   cycleNumber          Int
+  scheduledDate        DateTime
   applicationDate      DateTime
   lotNumber            String?
   expiryDate           DateTime?

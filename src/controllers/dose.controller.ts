@@ -112,6 +112,7 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
     const {
       treatmentId,
       cycleNumber,
+      scheduledDate,
       applicationDate,
       lotNumber,
       expiryDate,
@@ -148,12 +149,23 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
     }
 
     const appDate = new Date(applicationDate);
+    const schedDate = scheduledDate ? new Date(scheduledDate) : appDate;
 
     // Validate: Cannot mark as APPLIED if date is in the future
     const today = new Date();
     today.setHours(23, 59, 59, 999);
-    if (status === 'APPLIED' && appDate > today) {
+    if ((status === 'APPLIED' || status === 'APPLIED_LATE') && appDate > today) {
       throw new BadRequestError('Não é possível marcar como "Aplicada" uma dose com data futura. Use o status "Pendente" para agendamentos futuros.');
+    }
+
+    // Auto-detect APPLIED_LATE: if applied after scheduled date
+    let effectiveStatus = status || 'PENDING';
+    if (effectiveStatus === 'APPLIED') {
+      const schedDay = new Date(schedDate); schedDay.setHours(0, 0, 0, 0);
+      const appDay = new Date(appDate); appDay.setHours(0, 0, 0, 0);
+      if (appDay.getTime() > schedDay.getTime()) {
+        effectiveStatus = 'APPLIED_LATE';
+      }
     }
 
     const { calculatedNextDate, daysUntilNext } = calculateDoseLogic(
@@ -166,10 +178,11 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       data: {
         treatmentId,
         cycleNumber,
+        scheduledDate: schedDate,
         applicationDate: appDate,
         lotNumber: lotNumber || null,
         expiryDate: expiryDate ? new Date(expiryDate) : null,
-        status: status || 'PENDING',
+        status: effectiveStatus,
         calculatedNextDate,
         daysUntilNext,
         isLastBeforeConsult: isLastBeforeConsult || false,
@@ -204,6 +217,12 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
 
     // Always update treatment startDate based on dose dates (for message timeline)
     await updateTreatmentStartDate(treatmentId);
+
+    // Recalculate future scheduled dates if applied late
+    if (effectiveStatus === 'APPLIED_LATE' || effectiveStatus === 'APPLIED') {
+      await recalculateFutureScheduledDates(treatmentId, { cycleNumber, applicationDate: appDate });
+      await checkAndFinishTreatment(treatmentId);
+    }
 
     // Auto-create Sale record when paymentDate is set (for CAIXA module)
     if (paymentDate && paymentMethod) {
@@ -265,7 +284,7 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     // Validate: Cannot mark as APPLIED if date is in the future
     const today = new Date();
     today.setHours(23, 59, 59, 999);
-    if (status === 'APPLIED' && appDateToValidate > today) {
+    if ((status === 'APPLIED' || status === 'APPLIED_LATE') && appDateToValidate > today) {
       throw new BadRequestError('Não é possível marcar como "Aplicada" uma dose com data futura. Use o status "Pendente" para agendamentos futuros.');
     }
 
@@ -280,9 +299,19 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       updateData.daysUntilNext = daysUntilNext;
     }
 
+    // Auto-detect APPLIED_LATE: compare applicationDate vs scheduledDate
+    let effectiveStatus = status;
+    if (status === 'APPLIED' || status === 'APPLIED_LATE') {
+      const finalAppDate = new Date(applicationDate || existingDose.applicationDate);
+      const finalSchedDate = new Date(existingDose.scheduledDate);
+      finalAppDate.setHours(0, 0, 0, 0);
+      finalSchedDate.setHours(0, 0, 0, 0);
+      effectiveStatus = finalAppDate.getTime() > finalSchedDate.getTime() ? 'APPLIED_LATE' : 'APPLIED';
+    }
+
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber;
     if (expiryDate !== undefined) updateData.expiryDate = new Date(expiryDate);
-    if (status !== undefined) updateData.status = status;
+    if (effectiveStatus !== undefined) updateData.status = effectiveStatus;
     if (inventoryLotId !== undefined) updateData.inventoryLotId = inventoryLotId;
     if (isLastBeforeConsult !== undefined) updateData.isLastBeforeConsult = isLastBeforeConsult;
     if (consultationDate !== undefined) {
@@ -360,7 +389,13 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     }
 
     // Check if treatment should be finished (all planned doses applied)
-    if (status === 'APPLIED') {
+    if (effectiveStatus === 'APPLIED' || effectiveStatus === 'APPLIED_LATE') {
+      // Recalculate future scheduled dates based on actual application
+      const finalAppDate = new Date(applicationDate || existingDose.applicationDate);
+      await recalculateFutureScheduledDates(existingDose.treatmentId, {
+        cycleNumber: existingDose.cycleNumber,
+        applicationDate: finalAppDate
+      });
       await checkAndFinishTreatment(existingDose.treatmentId);
     }
 
@@ -455,7 +490,7 @@ async function updateTreatmentStartDate(treatmentId: string) {
   const latestAppliedDose = await prisma.dose.findFirst({
     where: {
       treatmentId,
-      status: 'APPLIED',
+      status: { in: ['APPLIED', 'APPLIED_LATE'] },
     },
     orderBy: { applicationDate: 'desc' },
     select: { applicationDate: true },
@@ -508,11 +543,11 @@ async function checkAndFinishTreatment(treatmentId: string) {
     return;
   }
 
-  // Count applied doses for this treatment
+  // Count applied doses for this treatment (includes APPLIED_LATE)
   const appliedDosesCount = await prisma.dose.count({
     where: {
       treatmentId,
-      status: 'APPLIED',
+      status: { in: ['APPLIED', 'APPLIED_LATE'] },
     },
   });
 
@@ -522,6 +557,45 @@ async function checkAndFinishTreatment(treatmentId: string) {
       where: { id: treatmentId },
       data: { status: 'FINISHED' },
     });
+  }
+}
+
+// Helper function to recalculate future scheduled dates when a dose is applied
+// This ensures future PENDING doses get their scheduledDate updated based on the actual application date
+async function recalculateFutureScheduledDates(treatmentId: string, fromDose: { cycleNumber: number; applicationDate: Date }) {
+  const treatment = await prisma.treatment.findUnique({
+    where: { id: treatmentId },
+    include: { protocol: { select: { frequencyDays: true } } },
+  });
+  if (!treatment) return;
+
+  const frequencyDays = treatment.protocol.frequencyDays;
+
+  // Get all PENDING doses with cycleNumber > the applied dose
+  const futurePendingDoses = await prisma.dose.findMany({
+    where: {
+      treatmentId,
+      status: 'PENDING',
+      cycleNumber: { gt: fromDose.cycleNumber },
+    },
+    orderBy: { cycleNumber: 'asc' },
+  });
+
+  // Recalculate each future dose's scheduledDate
+  let previousDate = fromDose.applicationDate;
+  for (const futureDose of futurePendingDoses) {
+    const newScheduledDate = new Date(previousDate);
+    newScheduledDate.setDate(newScheduledDate.getDate() + frequencyDays);
+
+    await prisma.dose.update({
+      where: { id: futureDose.id },
+      data: {
+        scheduledDate: newScheduledDate,
+        applicationDate: newScheduledDate, // For PENDING doses, keep dates in sync
+      },
+    });
+
+    previousDate = newScheduledDate;
   }
 }
 
