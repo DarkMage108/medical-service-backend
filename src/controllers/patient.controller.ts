@@ -50,7 +50,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
               protocol: { select: { frequencyDays: true } },
               doses: {
                 orderBy: { applicationDate: 'asc' },
-                select: { status: true, applicationDate: true, cycleNumber: true },
+                select: { status: true, applicationDate: true, scheduledDate: true, cycleNumber: true },
               },
             },
           },
@@ -62,10 +62,23 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       prisma.patient.count({ where }),
     ]);
 
-    // Calculate adherence level for each patient based on SCHEDULED doses from protocol
-    // Rules: Sem atraso = BOA, <30 dias de atraso = ATRASADO, >30 dias de atraso = ABANDONO
-    // IMPORTANT: Delay is calculated from SCHEDULED date (startDate + frequencyDays * cycleNumber)
-    // NOT from the date the dose was added in the system
+    // Fetch configurable adherence settings once
+    const adherenceSettings = await prisma.systemSettings.findMany({
+      where: { key: { startsWith: 'adherence_' } },
+    });
+    const settingsMap: Record<string, number> = {};
+    adherenceSettings.forEach((s: any) => { settingsMap[s.key] = parseInt(s.value, 10); });
+
+    const X = settingsMap['adherence_max_delay_good'] ?? 3;       // Max delay (days) for BOA
+    const Y = settingsMap['adherence_max_late_doses_partial'] ?? 3; // Max late doses for PARCIAL
+    const Z = settingsMap['adherence_min_delay_bad'] ?? 5;         // Min delay (days) for RUIM
+    const W = settingsMap['adherence_abandonment_days'] ?? 30;     // Days overdue for ABANDONO
+
+    // Calculate adherence level for each patient
+    // BOA: All doses applied + individual delays < X days
+    // PARCIAL: 2 to Y doses APPLIED_LATE with delay > X days
+    // RUIM: More than Y doses APPLIED_LATE with delay > Z days
+    // ABANDONO: Last scheduled dose (PENDING) exceeded W days overdue
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -73,73 +86,79 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       let adherenceLevel: string | null = null;
 
       if (patient.treatments && patient.treatments.length > 0) {
-        let maxDelayDays = 0;
         let hasOngoingTreatment = false;
-        let hasOverdueDose = false;
+        let lateCount = 0;     // APPLIED_LATE doses with delay > X
+        let veryLateCount = 0; // APPLIED_LATE doses with delay > Z
+        let isAbandoned = false;
 
         patient.treatments.forEach((treatment: any) => {
-          if (treatment.status === 'ONGOING') {
-            hasOngoingTreatment = true;
-            const doses = treatment.doses || [];
-            const frequencyDays = treatment.protocol?.frequencyDays || 28;
+          if (treatment.status !== 'ONGOING') return;
+          hasOngoingTreatment = true;
+          const doses = treatment.doses || [];
+          const frequencyDays = treatment.protocol?.frequencyDays || 28;
 
-            // Parse start date correctly to avoid timezone issues
-            const startDateStr = treatment.startDate.toISOString ?
-              treatment.startDate.toISOString() :
-              treatment.startDate;
-            const startDateOnly = startDateStr.split('T')[0];
-            const [startYear, startMonth, startDay] = startDateOnly.split('-').map(Number);
-            const startDate = new Date(startYear, startMonth - 1, startDay);
+          // Parse start date correctly to avoid timezone issues
+          const startDateStr = treatment.startDate.toISOString ?
+            treatment.startDate.toISOString() :
+            treatment.startDate;
+          const startDateOnly = startDateStr.split('T')[0];
+          const [startYear, startMonth, startDay] = startDateOnly.split('-').map(Number);
+          const startDate = new Date(startYear, startMonth - 1, startDay);
 
-            // Count applied doses vs planned doses
-            const appliedCount = doses.filter((d: any) => d.status === 'APPLIED' || d.status === 'APPLIED_LATE').length;
-            const plannedCount = treatment.plannedDosesBeforeConsult || 0;
+          // Count APPLIED_LATE doses with delay thresholds
+          doses.forEach((dose: any) => {
+            if (dose.status === 'APPLIED_LATE' && dose.scheduledDate && dose.applicationDate) {
+              const schedDay = new Date(dose.scheduledDate); schedDay.setHours(0, 0, 0, 0);
+              const appDay = new Date(dose.applicationDate); appDay.setHours(0, 0, 0, 0);
+              const delayDays = Math.floor((appDay.getTime() - schedDay.getTime()) / (1000 * 60 * 60 * 24));
 
-            // If all planned doses are applied, treatment is complete - no delay
-            if (plannedCount > 0 && appliedCount >= plannedCount) {
-              return; // This treatment is complete, skip delay calculation
+              if (delayDays > X) lateCount++;
+              if (delayDays > Z) veryLateCount++;
+            }
+          });
+
+          // Check for abandonment: last scheduled PENDING dose exceeded W days
+          const plannedCount = treatment.plannedDosesBeforeConsult || 0;
+          for (let i = plannedCount - 1; i >= 0; i--) {
+            const cycleNumber = i + 1;
+            const scheduledDate = new Date(startDate);
+            if (i > 0) {
+              scheduledDate.setDate(scheduledDate.getDate() + frequencyDays * i);
             }
 
-            // Check each planned dose based on SCHEDULED date from protocol
-            for (let i = 0; i < plannedCount; i++) {
-              const cycleNumber = i + 1;
+            const existingDose = doses.find((d: any) => d.cycleNumber === cycleNumber);
 
-              // Calculate SCHEDULED date: Dose 1 = startDate, Dose 2 = startDate + frequencyDays, etc.
-              const scheduledDate = new Date(startDate);
-              if (i > 0) {
-                scheduledDate.setDate(scheduledDate.getDate() + frequencyDays * i);
+            if (existingDose && existingDose.status === 'PENDING') {
+              // This is the last pending dose - check if overdue by W days
+              const daysOverdue = Math.floor((today.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysOverdue > W) {
+                isAbandoned = true;
               }
-
-              // Check if scheduled date has passed
-              const daysUntilScheduled = Math.floor((scheduledDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-
-              if (daysUntilScheduled < 0) {
-                // Scheduled date has passed - check if dose was applied
-                const existingDose = doses.find((d: any) => d.cycleNumber === cycleNumber);
-
-                if (!existingDose || (existingDose.status !== 'APPLIED' && existingDose.status !== 'APPLIED_LATE')) {
-                  // This dose is overdue
-                  hasOverdueDose = true;
-                  const delayDays = Math.abs(daysUntilScheduled);
-
-                  if (delayDays > maxDelayDays) {
-                    maxDelayDays = delayDays;
-                  }
-                  break; // Only count the first overdue dose per treatment
-                }
+              break;
+            } else if (!existingDose) {
+              // No dose record exists - check if scheduled date has passed by W days
+              const daysOverdue = Math.floor((today.getTime() - scheduledDate.getTime()) / (1000 * 60 * 60 * 24));
+              if (daysOverdue > W) {
+                isAbandoned = true;
               }
+              break;
+            } else if (existingDose.status === 'APPLIED' || existingDose.status === 'APPLIED_LATE') {
+              // This dose was applied, continue searching backwards
+              continue;
+            } else {
+              break;
             }
           }
         });
 
-        // Classify adherence based on delay from SCHEDULED doses
+        // Classify adherence (priority order)
         if (hasOngoingTreatment) {
-          if (!hasOverdueDose) {
-            adherenceLevel = 'BOA';
-          } else if (maxDelayDays > 30) {
+          if (isAbandoned) {
             adherenceLevel = 'ABANDONO';
-          } else if (maxDelayDays > 0) {
-            adherenceLevel = 'ATRASADO';
+          } else if (veryLateCount > Y) {
+            adherenceLevel = 'RUIM';
+          } else if (lateCount >= 2 && lateCount <= Y) {
+            adherenceLevel = 'PARCIAL';
           } else {
             adherenceLevel = 'BOA';
           }

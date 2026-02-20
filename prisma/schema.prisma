@@ -110,6 +110,7 @@ model Patient {
   dispenseLogs     DispenseLog[]
   sales            Sale[]
   events           PatientEvent[]
+  clinicalNotesEntries ClinicalNote[]
 
   @@map("patients")
 }
@@ -411,4 +412,27 @@ model PatientEvent {
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("patient_events")
+}
+
+model SystemSettings {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String
+  label     String?
+  updatedAt DateTime @updatedAt
+
+  @@map("system_settings")
+}
+
+model ClinicalNote {
+  id        String   @id @default(cuid())
+  patientId String
+  content   String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  @@map("clinical_notes")
 }
