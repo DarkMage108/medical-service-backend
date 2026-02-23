@@ -8,7 +8,7 @@ export const getTreatments = async (req: Request, res: Response, next: NextFunct
     const { patientId, status, protocolId, page = '1', limit = '20' } = req.query;
 
     const pageNum = parseInt(page as string, 10);
-    const limitNum = Math.min(parseInt(limit as string, 10), 100);
+    const limitNum = Math.min(parseInt(limit as string, 10), 1000);
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
@@ -172,11 +172,13 @@ export const createTreatment = async (req: Request, res: Response, next: NextFun
 export const updateTreatment = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { status, nextConsultationDate, observations, plannedDosesBeforeConsult } = req.body;
+    const { status, nextConsultationDate, observations, plannedDosesBeforeConsult, startDate } = req.body;
 
     const existingTreatment = await prisma.treatment.findUnique({
       where: { id },
-      select: { patientId: true },
+      include: {
+        protocol: { select: { frequencyDays: true } },
+      },
     });
 
     if (!existingTreatment) {
@@ -192,6 +194,7 @@ export const updateTreatment = async (req: Request, res: Response, next: NextFun
         }),
         ...(observations !== undefined && { observations }),
         ...(plannedDosesBeforeConsult !== undefined && { plannedDosesBeforeConsult }),
+        ...(startDate && { startDate: new Date(startDate) }),
       },
       include: {
         patient: {
@@ -202,6 +205,62 @@ export const updateTreatment = async (req: Request, res: Response, next: NextFun
         },
       },
     });
+
+    // When startDate changes, recalculate all PENDING doses' scheduledDate
+    if (startDate) {
+      const newStartDate = new Date(startDate);
+      const frequencyDays = existingTreatment.protocol.frequencyDays || 28;
+
+      // Get all doses for this treatment ordered by cycleNumber
+      const allDoses = await prisma.dose.findMany({
+        where: { treatmentId: id },
+        orderBy: { cycleNumber: 'asc' },
+      });
+
+      // Find the last applied dose to chain from
+      const lastAppliedDose = [...allDoses]
+        .filter((d: any) => d.status === 'APPLIED' || d.status === 'APPLIED_LATE')
+        .sort((a: any, b: any) => b.cycleNumber - a.cycleNumber)[0];
+
+      // Recalculate PENDING doses
+      let previousDate: Date;
+      let previousCycle: number;
+
+      if (lastAppliedDose) {
+        // Chain from the last applied dose
+        previousDate = new Date(lastAppliedDose.applicationDate);
+        previousCycle = lastAppliedDose.cycleNumber;
+      } else {
+        // No applied doses, chain from new startDate
+        previousDate = newStartDate;
+        previousCycle = 0;
+      }
+
+      const pendingDoses = allDoses
+        .filter((d: any) => d.status === 'PENDING' && d.cycleNumber > previousCycle)
+        .sort((a: any, b: any) => a.cycleNumber - b.cycleNumber);
+
+      for (const dose of pendingDoses) {
+        let newScheduledDate: Date;
+        if (dose.cycleNumber === 1 && !lastAppliedDose) {
+          // Dose 1 always matches startDate
+          newScheduledDate = newStartDate;
+        } else {
+          newScheduledDate = new Date(previousDate);
+          newScheduledDate.setDate(newScheduledDate.getDate() + frequencyDays);
+        }
+
+        await prisma.dose.update({
+          where: { id: dose.id },
+          data: {
+            scheduledDate: newScheduledDate,
+            applicationDate: newScheduledDate, // Keep in sync for PENDING doses
+          },
+        });
+
+        previousDate = newScheduledDate;
+      }
+    }
 
     // Recalculate patient active status if treatment status changed
     if (status) {

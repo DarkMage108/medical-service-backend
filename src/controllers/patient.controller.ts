@@ -8,7 +8,7 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
     const { search, diagnosis, active, page = '1', limit = '20' } = req.query;
 
     const pageNum = parseInt(page as string, 10);
-    const limitNum = Math.min(parseInt(limit as string, 10), 100);
+    const limitNum = Math.min(parseInt(limit as string, 10), 1000);
     const skip = (pageNum - 1) * limitNum;
 
     const where: any = {};
