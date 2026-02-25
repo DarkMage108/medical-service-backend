@@ -170,11 +170,23 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
       return { ...patientData, adherenceLevel };
     });
 
-    sendPaginated(res, patientsWithAdherence, {
-      total,
-      page: pageNum,
-      limit: limitNum,
-      totalPages: Math.ceil(total / limitNum),
+    // Apply adherence filter (post-query since it's calculated)
+    const { adherence } = req.query;
+    let finalPatients = patientsWithAdherence;
+    if (adherence) {
+      const adherenceStr = adherence as string;
+      if (adherenceStr === 'none') {
+        finalPatients = patientsWithAdherence.filter((p: any) => !p.adherenceLevel);
+      } else {
+        finalPatients = patientsWithAdherence.filter((p: any) => p.adherenceLevel === adherenceStr);
+      }
+    }
+
+    sendPaginated(res, finalPatients, {
+      total: adherence ? finalPatients.length : total,
+      page: adherence ? 1 : pageNum,
+      limit: adherence ? finalPatients.length || 1 : limitNum,
+      totalPages: adherence ? 1 : Math.ceil(total / limitNum),
     });
   } catch (error) {
     next(error);
