@@ -15,11 +15,17 @@ export const getPatients = async (req: Request, res: Response, next: NextFunctio
 
     if (search) {
       const searchStr = search as string;
-      where.OR = [
+      const phoneDigits = searchStr.replace(/\D/g, '');
+      const orConditions: any[] = [
         { fullName: { contains: searchStr, mode: 'insensitive' } },
-        { guardian: { phonePrimary: { contains: searchStr.replace(/\D/g, '') } } },
-        { guardian: { phoneSecondary: { contains: searchStr.replace(/\D/g, '') } } },
       ];
+      if (phoneDigits.length > 0) {
+        orConditions.push(
+          { guardian: { phonePrimary: { contains: phoneDigits } } },
+          { guardian: { phoneSecondary: { contains: phoneDigits } } },
+        );
+      }
+      where.OR = orConditions;
     }
 
     if (diagnosis) {
