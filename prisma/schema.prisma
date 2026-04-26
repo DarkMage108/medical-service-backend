@@ -38,6 +38,7 @@ enum DoseStatus {
   APPLIED
   APPLIED_LATE
   NOT_ACCEPTED
+  CONFIRM_APPLICATION
 }
 
 enum PaymentStatus {
@@ -86,30 +87,32 @@ model User {
 
   // Relations
   consentDocuments ConsentDocument[]
+  appliedDoses     Dose[]            @relation("DoseAppliedByUser")
+  doctorTreatments Treatment[]       @relation("TreatmentDoctor")
 
   @@map("users")
 }
 
 model Patient {
-  id            String   @id @default(cuid())
-  patientNumber Int      @unique @default(autoincrement())
+  id            String    @id @default(cuid())
+  patientNumber Int       @unique @default(autoincrement())
   fullName      String
   birthDate     DateTime?
   gender        Gender?
   mainDiagnosis String
   clinicalNotes String?
-  active        Boolean  @default(true)
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  active        Boolean   @default(true)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 
   // Relations
-  guardian         Guardian?
-  address          Address?
-  treatments       Treatment[]
-  consentDocuments ConsentDocument[]
-  dispenseLogs     DispenseLog[]
-  sales            Sale[]
-  events           PatientEvent[]
+  guardian             Guardian?
+  address              Address?
+  treatments           Treatment[]
+  consentDocuments     ConsentDocument[]
+  dispenseLogs         DispenseLog[]
+  sales                Sale[]
+  events               PatientEvent[]
   clinicalNotesEntries ClinicalNote[]
 
   @@map("patients")
@@ -178,8 +181,15 @@ model Protocol {
   frequencyDays  Int
   goal           String?
   message        String?
-  createdAt      DateTime         @default(now())
-  updatedAt      DateTime         @updatedAt
+
+  // Per-dose message configuration (Dose 1 / Last Dose)
+  dose1MessageEnabled    Boolean @default(true)
+  dose1ExtraMessage      String?
+  lastDoseMessageEnabled Boolean @default(true)
+  lastDoseExtraMessage   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   milestones ProtocolMilestone[]
@@ -202,57 +212,66 @@ model ProtocolMilestone {
 }
 
 model Treatment {
-  id                       String          @id @default(cuid())
-  patientId                String
-  protocolId               String
-  status                   TreatmentStatus @default(ONGOING)
-  startDate                DateTime
-  nextConsultationDate     DateTime?
-  observations             String?
-  plannedDosesBeforeConsult Int            @default(0)
-  createdAt                DateTime        @default(now())
-  updatedAt                DateTime        @updatedAt
+  id                        String          @id @default(cuid())
+  patientId                 String
+  protocolId                String
+  status                    TreatmentStatus @default(ONGOING)
+  startDate                 DateTime
+  nextConsultationDate      DateTime?
+  // New: structured next consultation forecast (Phase 3 of treatment wizard)
+  nextConsultationMonth     Int?
+  nextConsultationYear      Int?
+  nextConsultationFortnight Int? // 1 = 1ª Quinzena, 2 = 2ª Quinzena
+  observations              String?
+  plannedDosesBeforeConsult Int             @default(0)
+  doctorId                  String?
+  createdAt                 DateTime        @default(now())
+  updatedAt                 DateTime        @updatedAt
 
   // Relations
   patient  Patient  @relation(fields: [patientId], references: [id], onDelete: Cascade)
   protocol Protocol @relation(fields: [protocolId], references: [id])
+  doctor   User?    @relation("TreatmentDoctor", fields: [doctorId], references: [id])
   doses    Dose[]
 
   @@map("treatments")
 }
 
 model Dose {
-  id                   String        @id @default(cuid())
-  treatmentId          String
-  cycleNumber          Int
-  scheduledDate        DateTime
-  applicationDate      DateTime
-  lotNumber            String?
-  expiryDate           DateTime?
-  status               DoseStatus    @default(PENDING)
-  calculatedNextDate   DateTime?
-  daysUntilNext        Int?
-  isLastBeforeConsult  Boolean       @default(false)
-  consultationDate     DateTime?
-  consultationScheduled Boolean      @default(false)
-  paymentStatus        PaymentStatus @default(WAITING_PIX)
-  paymentUpdatedAt     DateTime      @default(now())
-  paymentMethod        PaymentMethod?
-  paymentDate          DateTime?
-  nurse                Boolean       @default(false)
-  surveyStatus         SurveyStatus  @default(NOT_SENT)
-  surveyScore          Int?
-  surveyComment        String?
-  clinicalObservations String?
-  inventoryLotId       String?
-  purchased            Boolean       @default(true)
-  deliveryStatus       String?
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+  id                    String         @id @default(cuid())
+  treatmentId           String
+  cycleNumber           Int
+  scheduledDate         DateTime
+  applicationDate       DateTime
+  lotNumber             String?
+  expiryDate            DateTime?
+  status                DoseStatus     @default(PENDING)
+  calculatedNextDate    DateTime?
+  daysUntilNext         Int?
+  isLastBeforeConsult   Boolean        @default(false)
+  consultationDate      DateTime?
+  consultationScheduled Boolean        @default(false)
+  paymentStatus         PaymentStatus  @default(WAITING_PIX)
+  paymentUpdatedAt      DateTime       @default(now())
+  paymentMethod         PaymentMethod?
+  paymentDate           DateTime?
+  nurse                 Boolean        @default(false)
+  surveyStatus          SurveyStatus   @default(NOT_SENT)
+  surveyScore           Int?
+  surveyComment         String?
+  clinicalObservations  String?
+  inventoryLotId        String?
+  purchased             Boolean        @default(true)
+  deliveryStatus        String?
+  appliedByUserId       String? // user who set status to APPLIED
+  appliedAt             DateTime? // when status was set to APPLIED
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   // Relations
   treatment     Treatment      @relation(fields: [treatmentId], references: [id], onDelete: Cascade)
   inventoryItem InventoryItem? @relation(fields: [inventoryLotId], references: [id])
+  appliedBy     User?          @relation("DoseAppliedByUser", fields: [appliedByUserId], references: [id])
   dispenseLogs  DispenseLog[]
   sale          Sale?
 
@@ -272,12 +291,12 @@ model InventoryItem {
   updatedAt      DateTime @updatedAt
 
   // Financial fields (defaults for CAIXA)
-  unitCost       Float?   @default(0)  // Custo unitário
-  baseSalePrice  Float?   @default(0)  // Preço de venda base
+  unitCost          Float? @default(0) // Custo unitário
+  baseSalePrice     Float? @default(0) // Preço de venda base
   defaultCommission Float? @default(0) // Comissão padrão (R$)
-  defaultTax     Float?   @default(0)  // Impostos padrão (R$)
-  defaultDelivery Float?  @default(0)  // Entrega padrão (R$)
-  defaultOther   Float?   @default(0)  // Outros padrão (R$)
+  defaultTax        Float? @default(0) // Impostos padrão (R$)
+  defaultDelivery   Float? @default(0) // Entrega padrão (R$)
+  defaultOther      Float? @default(0) // Outros padrão (R$)
 
   // Relations
   doses        Dose[]
@@ -306,14 +325,14 @@ model DispenseLog {
 }
 
 model PurchaseRequest {
-  id                        String                @id @default(cuid())
-  medicationName            String
+  id                         String                @id @default(cuid())
+  medicationName             String
   predictedConsumption10Days Int
-  currentStock              Int
-  suggestedQuantity         Int?
-  status                    PurchaseRequestStatus @default(PENDING)
-  createdAt                 DateTime              @default(now())
-  updatedAt                 DateTime              @updatedAt
+  currentStock               Int
+  suggestedQuantity          Int?
+  status                     PurchaseRequestStatus @default(PENDING)
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
 
   @@map("purchase_requests")
 }
@@ -336,21 +355,21 @@ model ConsentDocument {
 }
 
 model DismissedLog {
-  id                   String   @id @default(cuid())
-  contactId            String   @unique
-  dismissedAt          DateTime @default(now())
-  feedbackText         String?
+  id                     String   @id @default(cuid())
+  contactId              String   @unique
+  dismissedAt            DateTime @default(now())
+  feedbackText           String?
   feedbackClassification String?
-  feedbackNeedsMedical Boolean?
-  feedbackUrgency      String?
-  feedbackStatus       String?  @default("pending")
+  feedbackNeedsMedical   Boolean?
+  feedbackUrgency        String?
+  feedbackStatus         String?  @default("pending")
 
   // Manual registration fields
-  origin               String   @default("regua") // "regua" or "manual"
-  patientId            String?  // Required for manual entries
-  patientName          String?  // Stored for manual entries
-  patientPhone         String?  // Stored for manual entries
-  manualMessage        String?  // The message/context for manual entry
+  origin        String  @default("regua") // "regua" or "manual"
+  patientId     String? // Required for manual entries
+  patientName   String? // Stored for manual entries
+  patientPhone  String? // Stored for manual entries
+  manualMessage String? // The message/context for manual entry
 
   @@map("dismissed_logs")
 }
@@ -358,7 +377,7 @@ model DismissedLog {
 model RolePermission {
   id        String   @id @default(cuid())
   role      UserRole
-  menuKey   String   // Unique key for menu item (e.g., 'dashboard', 'patients', 'inventory')
+  menuKey   String // Unique key for menu item (e.g., 'dashboard', 'patients', 'inventory')
   canAccess Boolean  @default(true)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -368,28 +387,28 @@ model RolePermission {
 }
 
 model Sale {
-  id              String        @id @default(cuid())
-  doseId          String        @unique  // One sale per dose
-  inventoryItemId String                 // Which lot was used
-  patientId       String                 // For easy querying
+  id              String @id @default(cuid())
+  doseId          String @unique // One sale per dose
+  inventoryItemId String // Which lot was used
+  patientId       String // For easy querying
 
   // Financial data
-  salePrice       Float                  // Preço de venda
-  unitCost        Float                  // Custo unitário (copied from lot at time of sale)
-  commission      Float         @default(0)  // Comissão (R$)
-  tax             Float         @default(0)  // Impostos (R$)
-  delivery        Float         @default(0)  // Entrega (R$)
-  other           Float         @default(0)  // Outros (R$)
+  salePrice  Float // Preço de venda
+  unitCost   Float // Custo unitário (copied from lot at time of sale)
+  commission Float @default(0) // Comissão (R$)
+  tax        Float @default(0) // Impostos (R$)
+  delivery   Float @default(0) // Entrega (R$)
+  other      Float @default(0) // Outros (R$)
 
   // Calculated fields (stored for historical accuracy)
-  grossProfit     Float                  // salePrice - unitCost
-  netProfit       Float                  // grossProfit - commission - tax - delivery - other
+  grossProfit Float // salePrice - unitCost
+  netProfit   Float // grossProfit - commission - tax - delivery - other
 
-  paymentMethod   PaymentMethod
-  saleDate        DateTime      @default(now())
+  paymentMethod PaymentMethod
+  saleDate      DateTime      @default(now())
 
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   // Relations
   dose          Dose          @relation(fields: [doseId], references: [id], onDelete: Cascade)
@@ -435,4 +454,25 @@ model ClinicalNote {
   patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
 
   @@map("clinical_notes")
+}
+
+enum MessageTemplateTrigger {
+  CONSENT_TERM
+  SURVEY_PENDING
+  SCHEDULE_CONSULTATION
+  NEXT_DOSE
+  LATE_DOSE
+  GENERAL
+}
+
+model MessageTemplate {
+  id        String                 @id @default(cuid())
+  name      String
+  trigger   MessageTemplateTrigger @default(GENERAL)
+  content   String
+  active    Boolean                @default(true)
+  createdAt DateTime               @default(now())
+  updatedAt DateTime               @updatedAt
+
+  @@map("message_templates")
 }

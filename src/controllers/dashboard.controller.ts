@@ -18,6 +18,12 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
       lowStockItems,
       pendingPurchaseRequests,
       surveyScores,
+      // March 2026: 3 operational counters for new Painel de Controle Operacional
+      toDeliverCount,        // ENTREGAR: Pago + Aguardando Entrega
+      toPayCount,            // A PAGAR: pagamento pendente
+      nursingPendingCount,   // ENFERMAGEM: doses aguardando aplicação pela enfermeira
+      // March 2026: pending Dose 1 confirmation
+      confirmApplicationCount,
     ] = await Promise.all([
       prisma.patient.count(),
       prisma.patient.count({ where: { active: true } }),
@@ -61,10 +67,30 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
         },
         select: { surveyScore: true },
       }),
+      prisma.dose.count({
+        where: {
+          paymentStatus: 'PAID',
+          deliveryStatus: 'waiting',
+        },
+      }),
+      prisma.dose.count({
+        where: {
+          paymentStatus: { in: ['WAITING_PIX', 'WAITING_CARD', 'WAITING_BOLETO'] },
+        },
+      }),
+      prisma.dose.count({
+        where: {
+          nurse: true,
+          status: 'PENDING',
+        },
+      }),
+      prisma.dose.count({ where: { status: 'CONFIRM_APPLICATION' } }),
     ]);
 
-    // Calculate NPS
-    const validScores = surveyScores.filter((s: { surveyScore: number | null }) => s.surveyScore !== null && s.surveyScore > 0);
+    // Calculate NPS — only valid 1-10 scores; null is "not evaluated" (per March 2026 bug fix)
+    const validScores = surveyScores.filter(
+      (s: { surveyScore: number | null }) => s.surveyScore !== null && s.surveyScore > 0
+    );
     const npsScore =
       validScores.length > 0
         ? validScores.reduce((sum: number, s: { surveyScore: number | null }) => sum + (s.surveyScore || 0), 0) / validScores.length
@@ -80,7 +106,44 @@ export const getStats = async (req: Request, res: Response, next: NextFunction) 
       lowStockAlerts: lowStockItems,
       pendingPurchaseRequests,
       npsScore: Math.round(npsScore * 10) / 10,
+      // March 2026 operational counters
+      toDeliverCount,
+      toPayCount,
+      nursingPendingCount,
+      confirmApplicationCount,
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// List patients pending Dose 1 confirmation (CONFIRM_APPLICATION status) — March 2026 spec
+export const getConfirmApplicationDoses = async (_req: Request, res: Response, next: NextFunction) => {
+  try {
+    const doses = await prisma.dose.findMany({
+      where: { status: 'CONFIRM_APPLICATION' },
+      include: {
+        treatment: {
+          include: {
+            patient: {
+              select: {
+                id: true,
+                fullName: true,
+                guardian: {
+                  select: { fullName: true, phonePrimary: true },
+                },
+              },
+            },
+            protocol: {
+              select: { id: true, name: true, frequencyDays: true },
+            },
+          },
+        },
+      },
+      orderBy: { applicationDate: 'asc' },
+    });
+
+    sendSuccess(res, { data: doses });
   } catch (error) {
     next(error);
   }
@@ -100,7 +163,7 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
     const futureLimit = new Date(today);
     futureLimit.setDate(futureLimit.getDate() + daysAhead);
 
-    // Get active treatments with protocols, milestones, and last applied dose
+    // Get active treatments with protocols, milestones, and applied doses (for Dose 1 / last dose detection)
     const treatments = await prisma.treatment.findMany({
       where: {
         status: 'ONGOING',
@@ -111,7 +174,7 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
             id: true,
             fullName: true,
             guardian: {
-              select: { phonePrimary: true },
+              select: { phonePrimary: true, fullName: true },
             },
           },
         },
@@ -120,11 +183,12 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
             milestones: true,
           },
         },
+        doctor: {
+          select: { id: true, name: true },
+        },
         doses: {
-          where: { status: 'APPLIED' },
           orderBy: { applicationDate: 'desc' },
-          take: 1,
-          select: { applicationDate: true },
+          select: { id: true, cycleNumber: true, status: true, applicationDate: true },
         },
       },
     });
@@ -133,21 +197,63 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
     const dismissedLogs = await prisma.dismissedLog.findMany();
     const dismissedSet = new Set(dismissedLogs.map((d: { contactId: string }) => d.contactId));
 
-    // Calculate upcoming contacts
+    // Calculate upcoming contacts honoring per-dose protocol config
     const contacts: any[] = [];
 
     treatments.forEach((treatment: any) => {
-      // Use last applied dose date, or fallback to treatment startDate
-      const lastAppliedDose = treatment.doses?.[0];
+      // Last applied dose (any of APPLIED/APPLIED_LATE/CONFIRM_APPLICATION) drives the timeline
+      const appliedDoses = (treatment.doses || []).filter((d: any) =>
+        ['APPLIED', 'APPLIED_LATE', 'CONFIRM_APPLICATION'].includes(d.status)
+      );
+      const lastAppliedDose = appliedDoses[0]; // ordered desc
       const referenceDate = lastAppliedDose?.applicationDate || treatment.startDate;
 
-      treatment.protocol.milestones.forEach((milestone: any) => {
-        const contactDate = new Date(referenceDate);
-        contactDate.setDate(contactDate.getDate() + milestone.day);
+      // Per March 2026 spec: protocol messages anchored at lastAppliedDose are the "post-dose" reminders.
+      // "Não enviar mensagens padrão na Dose 1" = skip messages that follow the application of Dose 1.
+      // "Não enviar mensagens padrão na Última Dose" = skip messages that follow the last dose.
+      // If no dose has been applied yet, neither toggle applies — default messages still send.
+      const plannedDoses = treatment.plannedDosesBeforeConsult || 0;
+      const isOnDose1 = lastAppliedDose?.cycleNumber === 1;
+      const isOnLastDose = plannedDoses > 0 && lastAppliedDose?.cycleNumber === plannedDoses;
 
-        const contactId = `${treatment.id}_m_${milestone.day}`;
+      // Apply per-dose toggles for default protocol messages
+      const skipDefault =
+        (isOnDose1 && treatment.protocol.dose1MessageEnabled === false) ||
+        (isOnLastDose && treatment.protocol.lastDoseMessageEnabled === false);
 
-        // Include if within date range and not dismissed
+      if (!skipDefault) {
+        treatment.protocol.milestones.forEach((milestone: any) => {
+          const contactDate = new Date(referenceDate);
+          contactDate.setDate(contactDate.getDate() + milestone.day);
+
+          const contactId = `${treatment.id}_m_${milestone.day}`;
+
+          if (contactDate >= pastLimit && contactDate <= futureLimit && !dismissedSet.has(contactId)) {
+            contacts.push({
+              contactId,
+              treatmentId: treatment.id,
+              patientId: treatment.patient.id,
+              patientName: treatment.patient.fullName,
+              guardianPhone: treatment.patient.guardian?.phonePrimary,
+              guardianName: treatment.patient.guardian?.fullName,
+              doctorName: treatment.doctor?.name,
+              contactDate,
+              message: milestone.message,
+              protocolName: treatment.protocol.name,
+            });
+          }
+        });
+      }
+
+      // Per-dose extra messages: dispatched on the application date itself
+      const pushExtra = (cycle: number, message: string | null, suffix: string) => {
+        if (!message) return;
+        const dose = (treatment.doses || []).find((d: any) => d.cycleNumber === cycle);
+        // Anchor the extra message to the dose's date (or, for upcoming, to projected schedule)
+        const anchor = dose?.applicationDate || referenceDate;
+        const contactDate = new Date(anchor);
+        const contactId = `${treatment.id}_extra_${suffix}`;
+
         if (contactDate >= pastLimit && contactDate <= futureLimit && !dismissedSet.has(contactId)) {
           contacts.push({
             contactId,
@@ -155,12 +261,21 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
             patientId: treatment.patient.id,
             patientName: treatment.patient.fullName,
             guardianPhone: treatment.patient.guardian?.phonePrimary,
+            guardianName: treatment.patient.guardian?.fullName,
+            doctorName: treatment.doctor?.name,
             contactDate,
-            message: milestone.message,
+            message,
             protocolName: treatment.protocol.name,
+            isExtra: true,
+            extraType: suffix,
           });
         }
-      });
+      };
+
+      pushExtra(1, treatment.protocol.dose1ExtraMessage, 'dose1');
+      if (plannedDoses > 0) {
+        pushExtra(plannedDoses, treatment.protocol.lastDoseExtraMessage, 'lastDose');
+      }
     });
 
     // Sort by date

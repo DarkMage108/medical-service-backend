@@ -27,6 +27,7 @@ import salesRoutes from './routes/sales.routes.js';
 import patientEventRoutes from './routes/patientEvent.routes.js';
 import settingsRoutes from './routes/settings.routes.js';
 import clinicalNoteRoutes from './routes/clinicalNote.routes.js';
+import messageTemplateRoutes from './routes/messageTemplate.routes.js';
 
 dotenv.config();
 
@@ -101,6 +102,7 @@ app.use('/api/sales', salesRoutes);
 app.use('/api', patientEventRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api', clinicalNoteRoutes);
+app.use('/api/message-templates', messageTemplateRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

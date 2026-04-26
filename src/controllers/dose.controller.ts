@@ -55,6 +55,9 @@ export const getDoses = async (req: Request, res: Response, next: NextFunction) 
           inventoryItem: {
             select: { id: true, medicationName: true, lotNumber: true },
           },
+          appliedBy: {
+            select: { id: true, name: true },
+          },
         },
         skip,
         take: limitNum,
@@ -93,6 +96,9 @@ export const getDose = async (req: Request, res: Response, next: NextFunction) =
         },
         inventoryItem: {
           select: { id: true, medicationName: true, lotNumber: true, quantity: true },
+        },
+        appliedBy: {
+          select: { id: true, name: true },
         },
       },
     });
@@ -158,9 +164,11 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       throw new BadRequestError('Não é possível marcar como "Aplicada" uma dose com data futura. Use o status "Pendente" para agendamentos futuros.');
     }
 
-    // Auto-detect APPLIED_LATE: if applied after scheduled date
+    // CONFIRM_APPLICATION is a visual-only status; logically behaves as APPLIED
+    // but does not trigger sale/inventory flow nor require nurse data
     let effectiveStatus = status || 'PENDING';
     if (effectiveStatus === 'APPLIED') {
+      // Auto-detect APPLIED_LATE: if applied after scheduled date
       const schedDay = new Date(schedDate); schedDay.setHours(0, 0, 0, 0);
       const appDay = new Date(appDate); appDay.setHours(0, 0, 0, 0);
       if (appDay.getTime() > schedDay.getTime()) {
@@ -172,6 +180,9 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       appDate,
       treatment.protocol.frequencyDays
     );
+
+    // Track who applied the dose (when status moves to APPLIED/APPLIED_LATE)
+    const isNowApplied = effectiveStatus === 'APPLIED' || effectiveStatus === 'APPLIED_LATE';
 
     // Create the dose
     const dose = await prisma.dose.create({
@@ -192,11 +203,14 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
         paymentDate: paymentDate ? new Date(paymentDate) : null,
         nurse: nurse || false,
         surveyStatus: surveyStatus || (nurse ? 'WAITING' : 'NOT_SENT'),
-        surveyScore: surveyScore || null,
+        // March 2026 spec: 0 não faz parte da escala válida (1-10). Treat 0 as null ("não avaliado").
+        surveyScore: typeof surveyScore === 'number' && surveyScore > 0 ? surveyScore : null,
         surveyComment: surveyComment || null,
         inventoryLotId: inventoryLotId || null,
         purchased: purchased !== undefined ? purchased : true,
         deliveryStatus: deliveryStatus || null,
+        appliedByUserId: isNowApplied ? (req.user?.id || null) : null,
+        appliedAt: isNowApplied ? new Date() : null,
       },
       include: {
         treatment: {
@@ -208,9 +222,13 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
       },
     });
 
+    // CONFIRM_APPLICATION: skip sale/inventory flow per spec
+    // (visual-only status, will be completed later when nurse fills data and confirms)
+    const isConfirmApplication = effectiveStatus === 'CONFIRM_APPLICATION';
+
     // Dispense medication from inventory when purchased=true (regardless of dose status)
     // purchased=false means patient brought their own medication, no inventory deduction
-    const shouldDispense = purchased !== false; // default true if not specified
+    const shouldDispense = !isConfirmApplication && purchased !== false;
     if (inventoryLotId && shouldDispense) {
       await dispenseMedication(inventoryLotId, treatment.patient.id, dose.id);
     }
@@ -218,14 +236,16 @@ export const createDose = async (req: Request, res: Response, next: NextFunction
     // Always update treatment startDate based on dose dates (for message timeline)
     await updateTreatmentStartDate(treatmentId);
 
-    // Recalculate future scheduled dates if applied late
-    if (effectiveStatus === 'APPLIED_LATE' || effectiveStatus === 'APPLIED') {
+    // Recalculate future scheduled dates if applied late or applied
+    // (CONFIRM_APPLICATION also behaves as applied for dose-chain purposes per spec)
+    if (effectiveStatus === 'APPLIED_LATE' || effectiveStatus === 'APPLIED' || isConfirmApplication) {
       await recalculateFutureScheduledDates(treatmentId, { cycleNumber, applicationDate: appDate });
       await checkAndFinishTreatment(treatmentId);
     }
 
-    // Auto-create Sale record when paymentDate is set (for CAIXA module)
-    if (paymentDate && paymentMethod) {
+    // Auto-create Sale record when paymentDate is set (for CAIXA module).
+    // Skipped for CONFIRM_APPLICATION (financial data not yet entered).
+    if (!isConfirmApplication && paymentDate && paymentMethod) {
       await createOrUpdateSaleFromDose(dose.id, treatment.patient.id, paymentMethod as PaymentMethod, new Date(paymentDate));
     }
 
@@ -298,6 +318,8 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       updateData.calculatedNextDate = calculatedNextDate;
       updateData.daysUntilNext = daysUntilNext;
     }
+    // BUG FIX: do NOT auto-overwrite applicationDate on status change.
+    // The manually-entered date must be preserved when moving to APPLIED.
 
     // Auto-detect APPLIED_LATE: compare applicationDate vs scheduledDate
     let effectiveStatus = status;
@@ -308,10 +330,21 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       finalSchedDate.setHours(0, 0, 0, 0);
       effectiveStatus = finalAppDate.getTime() > finalSchedDate.getTime() ? 'APPLIED_LATE' : 'APPLIED';
     }
+    // CONFIRM_APPLICATION passes through unchanged (visual-only)
 
     if (lotNumber !== undefined) updateData.lotNumber = lotNumber;
     if (expiryDate !== undefined) updateData.expiryDate = new Date(expiryDate);
-    if (effectiveStatus !== undefined) updateData.status = effectiveStatus;
+    if (effectiveStatus !== undefined) {
+      updateData.status = effectiveStatus;
+
+      // Track who set the dose to APPLIED/APPLIED_LATE (for "Application Data" highlight card)
+      const wasApplied = existingDose.status === 'APPLIED' || existingDose.status === 'APPLIED_LATE';
+      const isNowApplied = effectiveStatus === 'APPLIED' || effectiveStatus === 'APPLIED_LATE';
+      if (isNowApplied && !wasApplied) {
+        updateData.appliedByUserId = req.user?.id || null;
+        updateData.appliedAt = new Date();
+      }
+    }
     if (inventoryLotId !== undefined) updateData.inventoryLotId = inventoryLotId;
     if (isLastBeforeConsult !== undefined) updateData.isLastBeforeConsult = isLastBeforeConsult;
     if (consultationDate !== undefined) {
@@ -341,7 +374,10 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
     if (surveyStatus !== undefined && (nurse || existingDose.nurse)) {
       updateData.surveyStatus = surveyStatus;
     }
-    if (surveyScore !== undefined) updateData.surveyScore = surveyScore;
+    if (surveyScore !== undefined) {
+      // March 2026 spec: treat 0 as null (escala válida é 1-10).
+      updateData.surveyScore = typeof surveyScore === 'number' && surveyScore > 0 ? surveyScore : null;
+    }
     if (surveyComment !== undefined) updateData.surveyComment = surveyComment;
     if (purchased !== undefined) updateData.purchased = purchased;
     if (deliveryStatus !== undefined) updateData.deliveryStatus = deliveryStatus;
@@ -358,6 +394,9 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
         },
         inventoryItem: {
           select: { id: true, medicationName: true, lotNumber: true },
+        },
+        appliedBy: {
+          select: { id: true, name: true },
         },
       },
     });
@@ -388,8 +427,10 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       await updateTreatmentStartDate(existingDose.treatmentId);
     }
 
-    // Check if treatment should be finished (all planned doses applied)
-    if (effectiveStatus === 'APPLIED' || effectiveStatus === 'APPLIED_LATE') {
+    // Check if treatment should be finished (all planned doses applied).
+    // CONFIRM_APPLICATION counts as applied for chain/finish logic per spec.
+    const isAppliedLike = effectiveStatus === 'APPLIED' || effectiveStatus === 'APPLIED_LATE' || effectiveStatus === 'CONFIRM_APPLICATION';
+    if (isAppliedLike) {
       // Recalculate future scheduled dates based on actual application
       const finalAppDate = new Date(applicationDate || existingDose.applicationDate);
       await recalculateFutureScheduledDates(existingDose.treatmentId, {
@@ -399,8 +440,9 @@ export const updateDose = async (req: Request, res: Response, next: NextFunction
       await checkAndFinishTreatment(existingDose.treatmentId);
     }
 
-    // Auto-create/update Sale record when paymentDate is set (for CAIXA module)
-    if (paymentDate && paymentMethod) {
+    // Auto-create/update Sale record when paymentDate is set (for CAIXA module).
+    // Only when not CONFIRM_APPLICATION (financial data not finalized yet).
+    if (effectiveStatus !== 'CONFIRM_APPLICATION' && paymentDate && paymentMethod) {
       await createOrUpdateSaleFromDose(dose.id, existingDose.treatment.patient.id, paymentMethod as PaymentMethod, new Date(paymentDate));
     }
 
@@ -444,7 +486,10 @@ export const updateSurvey = async (req: Request, res: Response, next: NextFuncti
       where: { id },
       data: {
         ...(surveyStatus && { surveyStatus }),
-        ...(surveyScore !== undefined && { surveyScore }),
+        // March 2026 spec: treat 0 as null (escala válida é 1-10).
+        ...(surveyScore !== undefined && {
+          surveyScore: typeof surveyScore === 'number' && surveyScore > 0 ? surveyScore : null,
+        }),
         ...(surveyComment !== undefined && { surveyComment }),
       },
     });
@@ -486,11 +531,12 @@ async function dispenseMedication(inventoryLotId: string, patientId: string, dos
 // Priority: 1) Latest APPLIED dose, 2) First PENDING dose
 // This ensures the message timeline (D0, D1, D30, D77, etc.) uses the correct reference date
 async function updateTreatmentStartDate(treatmentId: string) {
-  // Get the most recent applied dose for this treatment
+  // Get the most recent applied dose for this treatment.
+  // CONFIRM_APPLICATION behaves as APPLIED per spec.
   const latestAppliedDose = await prisma.dose.findFirst({
     where: {
       treatmentId,
-      status: { in: ['APPLIED', 'APPLIED_LATE'] },
+      status: { in: ['APPLIED', 'APPLIED_LATE', 'CONFIRM_APPLICATION'] },
     },
     orderBy: { applicationDate: 'desc' },
     select: { applicationDate: true },
@@ -543,11 +589,12 @@ async function checkAndFinishTreatment(treatmentId: string) {
     return;
   }
 
-  // Count applied doses for this treatment (includes APPLIED_LATE)
+  // Count applied doses for this treatment.
+  // Per spec, CONFIRM_APPLICATION behaves as APPLIED for system logic.
   const appliedDosesCount = await prisma.dose.count({
     where: {
       treatmentId,
-      status: { in: ['APPLIED', 'APPLIED_LATE'] },
+      status: { in: ['APPLIED', 'APPLIED_LATE', 'CONFIRM_APPLICATION'] },
     },
   });
 

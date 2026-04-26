@@ -53,7 +53,19 @@ export const getProtocol = async (req: Request, res: Response, next: NextFunctio
 
 export const createProtocol = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { name, category, medicationType, frequencyDays, goal, message, milestones } = req.body;
+    const {
+      name,
+      category,
+      medicationType,
+      frequencyDays,
+      goal,
+      message,
+      milestones,
+      dose1MessageEnabled,
+      dose1ExtraMessage,
+      lastDoseMessageEnabled,
+      lastDoseExtraMessage,
+    } = req.body;
 
     // Validate required fields
     if (!name || !name.trim()) {
@@ -91,6 +103,10 @@ export const createProtocol = async (req: Request, res: Response, next: NextFunc
         frequencyDays: Number(frequencyDays),
         goal: goal || null,
         message: message || null,
+        dose1MessageEnabled: dose1MessageEnabled !== undefined ? Boolean(dose1MessageEnabled) : true,
+        dose1ExtraMessage: dose1ExtraMessage || null,
+        lastDoseMessageEnabled: lastDoseMessageEnabled !== undefined ? Boolean(lastDoseMessageEnabled) : true,
+        lastDoseExtraMessage: lastDoseExtraMessage || null,
         ...(milestones && milestones.length > 0 && {
           milestones: {
             create: milestones.map((m: { day: number; message: string }) => ({
@@ -116,7 +132,19 @@ export const createProtocol = async (req: Request, res: Response, next: NextFunc
 export const updateProtocol = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { name, category, medicationType, frequencyDays, goal, message, milestones } = req.body;
+    const {
+      name,
+      category,
+      medicationType,
+      frequencyDays,
+      goal,
+      message,
+      milestones,
+      dose1MessageEnabled,
+      dose1ExtraMessage,
+      lastDoseMessageEnabled,
+      lastDoseExtraMessage,
+    } = req.body;
 
     // Validate category if provided
     if (category) {
@@ -161,6 +189,10 @@ export const updateProtocol = async (req: Request, res: Response, next: NextFunc
         ...(frequencyDays && { frequencyDays: Number(frequencyDays) }),
         ...(goal !== undefined && { goal: goal || null }),
         ...(message !== undefined && { message: message || null }),
+        ...(dose1MessageEnabled !== undefined && { dose1MessageEnabled: Boolean(dose1MessageEnabled) }),
+        ...(dose1ExtraMessage !== undefined && { dose1ExtraMessage: dose1ExtraMessage || null }),
+        ...(lastDoseMessageEnabled !== undefined && { lastDoseMessageEnabled: Boolean(lastDoseMessageEnabled) }),
+        ...(lastDoseExtraMessage !== undefined && { lastDoseExtraMessage: lastDoseExtraMessage || null }),
         ...(milestones && {
           milestones: {
             create: milestones.map((m: { day: number; message: string }) => ({

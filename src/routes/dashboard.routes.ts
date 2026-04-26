@@ -9,6 +9,7 @@ import {
   getActivityWindow,
   getAllDismissedLogs,
   getAllDocuments,
+  getConfirmApplicationDoses,
 } from '../controllers/dashboard.controller.js';
 import { authenticate } from '../middleware/auth.js';
 
@@ -25,5 +26,6 @@ router.post('/dismissed-logs/:contactId/resolve', resolveFeedback);
 router.get('/activity-window', getActivityWindow);
 router.get('/dismissed-logs', getAllDismissedLogs);
 router.get('/documents', getAllDocuments);
+router.get('/confirm-application-doses', getConfirmApplicationDoses);
 
 export default router;

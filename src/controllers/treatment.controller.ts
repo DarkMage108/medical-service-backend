@@ -37,6 +37,9 @@ export const getTreatments = async (req: Request, res: Response, next: NextFunct
               medicationType: true,
             },
           },
+          doctor: {
+            select: { id: true, name: true },
+          },
           _count: {
             select: { doses: true },
           },
@@ -86,6 +89,9 @@ export const getTreatment = async (req: Request, res: Response, next: NextFuncti
             },
           },
         },
+        doctor: {
+          select: { id: true, name: true },
+        },
         doses: {
           orderBy: { cycleNumber: 'asc' },
           include: {
@@ -95,6 +101,9 @@ export const getTreatment = async (req: Request, res: Response, next: NextFuncti
                 medicationName: true,
                 lotNumber: true,
               },
+            },
+            appliedBy: {
+              select: { id: true, name: true },
             },
           },
         },
@@ -113,7 +122,21 @@ export const getTreatment = async (req: Request, res: Response, next: NextFuncti
 
 export const createTreatment = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { patientId, protocolId, startDate, nextConsultationDate, observations, plannedDosesBeforeConsult } = req.body;
+    const {
+      patientId,
+      protocolId,
+      startDate,
+      nextConsultationDate,
+      // New: structured fortnight forecast (Phase 3)
+      nextConsultationMonth,
+      nextConsultationYear,
+      nextConsultationFortnight,
+      observations,
+      plannedDosesBeforeConsult,
+      doctorId,
+      // New: auto-create Dose 1 with CONFIRM_APPLICATION (Phase 1)
+      autoCreateDose1,
+    } = req.body;
 
     if (!patientId || !protocolId || !startDate) {
       throw new BadRequestError('Patient, protocol, and start date are required');
@@ -137,14 +160,25 @@ export const createTreatment = async (req: Request, res: Response, next: NextFun
       throw new NotFoundError('Protocol not found');
     }
 
+    // Validate fortnight if provided
+    if (nextConsultationFortnight !== undefined && nextConsultationFortnight !== null) {
+      if (![1, 2].includes(Number(nextConsultationFortnight))) {
+        throw new BadRequestError('nextConsultationFortnight deve ser 1 ou 2');
+      }
+    }
+
     const treatment = await prisma.treatment.create({
       data: {
         patientId,
         protocolId,
         startDate: new Date(startDate),
         nextConsultationDate: nextConsultationDate ? new Date(nextConsultationDate) : null,
+        nextConsultationMonth: nextConsultationMonth != null ? Number(nextConsultationMonth) : null,
+        nextConsultationYear: nextConsultationYear != null ? Number(nextConsultationYear) : null,
+        nextConsultationFortnight: nextConsultationFortnight != null ? Number(nextConsultationFortnight) : null,
         observations,
         plannedDosesBeforeConsult: plannedDosesBeforeConsult || 0,
+        doctorId: doctorId || null,
         status: 'ONGOING',
       },
       include: {
@@ -154,8 +188,40 @@ export const createTreatment = async (req: Request, res: Response, next: NextFun
         protocol: {
           select: { id: true, name: true, frequencyDays: true },
         },
+        doctor: {
+          select: { id: true, name: true },
+        },
       },
     });
+
+    // Phase 1 of treatment wizard: auto-register Dose 1 with CONFIRM_APPLICATION status.
+    // Visual-only status — logically counts as APPLIED, no message dispatch, nurse data optional.
+    if (autoCreateDose1) {
+      const appDate = new Date(startDate);
+      const nextDate = new Date(appDate);
+      nextDate.setDate(nextDate.getDate() + (protocol.frequencyDays || 28));
+
+      const todayMid = new Date();
+      todayMid.setHours(0, 0, 0, 0);
+      const diffMs = nextDate.getTime() - todayMid.getTime();
+      const daysUntilNext = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+
+      await prisma.dose.create({
+        data: {
+          treatmentId: treatment.id,
+          cycleNumber: 1,
+          scheduledDate: appDate,
+          applicationDate: appDate,
+          status: 'CONFIRM_APPLICATION',
+          calculatedNextDate: nextDate,
+          daysUntilNext,
+          paymentStatus: 'WAITING_PIX',
+          nurse: false,
+          surveyStatus: 'NOT_SENT',
+          purchased: true,
+        },
+      });
+    }
 
     // Update patient active status
     await prisma.patient.update({
@@ -172,7 +238,17 @@ export const createTreatment = async (req: Request, res: Response, next: NextFun
 export const updateTreatment = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { id } = req.params;
-    const { status, nextConsultationDate, observations, plannedDosesBeforeConsult, startDate } = req.body;
+    const {
+      status,
+      nextConsultationDate,
+      nextConsultationMonth,
+      nextConsultationYear,
+      nextConsultationFortnight,
+      observations,
+      plannedDosesBeforeConsult,
+      startDate,
+      doctorId,
+    } = req.body;
 
     const existingTreatment = await prisma.treatment.findUnique({
       where: { id },
@@ -185,6 +261,12 @@ export const updateTreatment = async (req: Request, res: Response, next: NextFun
       throw new NotFoundError('Treatment not found');
     }
 
+    if (nextConsultationFortnight !== undefined && nextConsultationFortnight !== null) {
+      if (![1, 2].includes(Number(nextConsultationFortnight))) {
+        throw new BadRequestError('nextConsultationFortnight deve ser 1 ou 2');
+      }
+    }
+
     const treatment = await prisma.treatment.update({
       where: { id },
       data: {
@@ -192,9 +274,19 @@ export const updateTreatment = async (req: Request, res: Response, next: NextFun
         ...(nextConsultationDate !== undefined && {
           nextConsultationDate: nextConsultationDate ? new Date(nextConsultationDate) : null,
         }),
+        ...(nextConsultationMonth !== undefined && {
+          nextConsultationMonth: nextConsultationMonth != null ? Number(nextConsultationMonth) : null,
+        }),
+        ...(nextConsultationYear !== undefined && {
+          nextConsultationYear: nextConsultationYear != null ? Number(nextConsultationYear) : null,
+        }),
+        ...(nextConsultationFortnight !== undefined && {
+          nextConsultationFortnight: nextConsultationFortnight != null ? Number(nextConsultationFortnight) : null,
+        }),
         ...(observations !== undefined && { observations }),
         ...(plannedDosesBeforeConsult !== undefined && { plannedDosesBeforeConsult }),
         ...(startDate && { startDate: new Date(startDate) }),
+        ...(doctorId !== undefined && { doctorId: doctorId || null }),
       },
       include: {
         patient: {
@@ -202,6 +294,9 @@ export const updateTreatment = async (req: Request, res: Response, next: NextFun
         },
         protocol: {
           select: { id: true, name: true, frequencyDays: true },
+        },
+        doctor: {
+          select: { id: true, name: true },
         },
       },
     });
