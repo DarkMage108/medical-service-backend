@@ -2,7 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma.js';
 import { NotFoundError, BadRequestError } from '../utils/errors.js';
 import { sendSuccess, sendCreated, sendNoContent } from '../utils/response.js';
-import { resolveTemplateForTreatment } from '../services/messageVariables.service.js';
+import { resolveTemplateForTreatment, resolveTemplateForPatient } from '../services/messageVariables.service.js';
 
 export const getMessageTemplates = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -107,17 +107,18 @@ export const deleteMessageTemplate = async (req: Request, res: Response, next: N
   }
 };
 
-// Resolve a template (or ad-hoc content) against a treatment context — returns the rendered message.
+// Resolve a template (or ad-hoc content) against a treatment OR patient context — returns the rendered message.
 // Used by the action-popup flow on the dashboard (March 2026 spec).
+// Supports patient-only context (no active treatment) for Termo de Consentimento / inactive patients.
 export const resolveTemplate = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { templateId, content, treatmentId, doseId } = req.body;
+    const { templateId, content, treatmentId, patientId, doseId } = req.body;
 
     if (!templateId && !content) {
       throw new BadRequestError('Forneça templateId ou content para resolver');
     }
-    if (!treatmentId) {
-      throw new BadRequestError('treatmentId é obrigatório');
+    if (!treatmentId && !patientId) {
+      throw new BadRequestError('treatmentId ou patientId é obrigatório');
     }
 
     let raw = content;
@@ -129,7 +130,10 @@ export const resolveTemplate = async (req: Request, res: Response, next: NextFun
       raw = tpl.content;
     }
 
-    const rendered = await resolveTemplateForTreatment(raw, treatmentId, doseId);
+    // Prefer treatment context (richer variable set); fall back to patient-only.
+    const rendered = treatmentId
+      ? await resolveTemplateForTreatment(raw, treatmentId, doseId)
+      : await resolveTemplateForPatient(raw, patientId);
 
     sendSuccess(res, { rendered, raw });
   } catch (error) {

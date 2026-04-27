@@ -130,3 +130,62 @@ export const resolveTemplateForTreatment = async (
   const vars = await buildTreatmentVariables(treatmentId, doseId);
   return renderTemplate(template, vars);
 };
+
+// Patient-only variable resolution — used when no active treatment is available
+// (e.g., Termo de Consentimento for inactive patients or patients without treatments).
+// Falls back to the most recent treatment if any exists, so {nome_medico} can still resolve.
+export const buildPatientVariables = async (patientId: string): Promise<Record<string, string>> => {
+  const patient = await prisma.patient.findUnique({
+    where: { id: patientId },
+    include: {
+      guardian: true,
+      treatments: {
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        include: {
+          doctor: { select: { name: true } },
+          protocol: { select: { frequencyDays: true } },
+          doses: {
+            orderBy: { cycleNumber: 'asc' },
+          },
+        },
+      },
+    },
+  });
+
+  if (!patient) return {};
+
+  const latestTreatment: any = patient.treatments[0];
+
+  // Try to derive next dose date / consultation period from the latest treatment if one exists.
+  let nextDoseDate: Date | null = null;
+  let consultPeriod = '';
+  if (latestTreatment) {
+    const firstPending = latestTreatment.doses.find((d: any) => d.status === 'PENDING');
+    if (firstPending) {
+      nextDoseDate = new Date(firstPending.applicationDate);
+    }
+    consultPeriod = formatConsultationPeriod(
+      latestTreatment.nextConsultationMonth,
+      latestTreatment.nextConsultationYear,
+      latestTreatment.nextConsultationFortnight,
+      latestTreatment.nextConsultationDate,
+    );
+  }
+
+  return {
+    '{nome_responsavel}':      firstName(patient.guardian?.fullName),
+    '{nome_paciente}':         firstName(patient.fullName),
+    '{nome_medico}':           latestTreatment?.doctor?.name || '',
+    '{data_proxima_dose}':     formatDateBR(nextDoseDate),
+    '{data_proxima_consulta}': consultPeriod,
+  };
+};
+
+export const resolveTemplateForPatient = async (
+  template: string,
+  patientId: string,
+): Promise<string> => {
+  const vars = await buildPatientVariables(patientId);
+  return renderTemplate(template, vars);
+};

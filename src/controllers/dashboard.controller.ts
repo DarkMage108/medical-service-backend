@@ -291,16 +291,26 @@ export const dismissContact = async (req: Request, res: Response, next: NextFunc
   try {
     const { contactId, feedback } = req.body;
 
-    const dismissed = await prisma.dismissedLog.create({
-      data: {
-        contactId,
-        feedbackText: feedback?.text || null,
-        feedbackClassification: feedback?.classification || null,
-        feedbackNeedsMedical: feedback?.needsMedicalResponse || null,
-        feedbackUrgency: feedback?.urgency || null,
-        feedbackStatus: feedback?.text ? 'pending' : null,
-        origin: 'regua',
-      },
+    if (!contactId) {
+      return res.status(400).json({ error: 'contactId is required' });
+    }
+
+    // March 2026: idempotent — if already dismissed, refresh feedback fields instead of erroring.
+    // Sidebar pages (March 2026) reuse this endpoint with stable contactIds.
+    const data = {
+      contactId,
+      feedbackText: feedback?.text || null,
+      feedbackClassification: feedback?.classification || null,
+      feedbackNeedsMedical: feedback?.needsMedicalResponse || null,
+      feedbackUrgency: feedback?.urgency || null,
+      feedbackStatus: feedback?.text ? 'pending' : null,
+      origin: 'regua' as const,
+    };
+
+    const dismissed = await prisma.dismissedLog.upsert({
+      where: { contactId },
+      update: data,
+      create: data,
     });
 
     sendCreated(res, dismissed);

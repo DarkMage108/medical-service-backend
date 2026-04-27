@@ -10,7 +10,8 @@ enum UserRole {
   NURSE = 'NURSE',
 }
 
-// Define available menu items with their default permissions per role
+// Define available menu items with their default permissions per role.
+// March 2026: added 5 new sidebar pages (consent-terms, doses-page, consultations, survey, message-templates).
 export const MENU_ITEMS = [
   { key: 'dashboard', label: 'Dashboard', path: '/' },
   { key: 'checklist', label: 'Checklist', path: '/checklist' },
@@ -21,6 +22,12 @@ export const MENU_ITEMS = [
   { key: 'cashregister', label: 'CAIXA', path: '/caixa' },
   { key: 'diagnoses', label: 'Diagnósticos', path: '/diagnosticos' },
   { key: 'protocols', label: 'Protocolos', path: '/protocolos' },
+  // March 2026 — sidebar pages extracted from main dashboard
+  { key: 'consent-terms', label: 'Termos de Consentimento', path: '/termos-consentimento' },
+  { key: 'doses-page', label: 'Doses', path: '/doses' },
+  { key: 'consultations', label: 'Consultas', path: '/consultas' },
+  { key: 'survey', label: 'Pesquisa Enfermagem', path: '/pesquisa-enfermagem' },
+  { key: 'message-templates', label: 'Modelos de Mensagem', path: '/modelos-mensagem' },
 ];
 
 // Default permissions for each role
@@ -35,6 +42,11 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
     cashregister: true,
     diagnoses: true,
     protocols: true,
+    'consent-terms': true,
+    'doses-page': true,
+    consultations: true,
+    survey: true,
+    'message-templates': true,
   },
   [UserRole.DOCTOR]: {
     dashboard: true,
@@ -46,6 +58,11 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
     cashregister: true,
     diagnoses: true,
     protocols: true,
+    'consent-terms': true,
+    'doses-page': true,
+    consultations: true,
+    survey: true,
+    'message-templates': true,
   },
   [UserRole.SECRETARY]: {
     dashboard: true,
@@ -57,6 +74,12 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
     cashregister: false,
     diagnoses: false,
     protocols: false,
+    // Secretária handles operational pages (consent, doses, consultas, pesquisa, templates)
+    'consent-terms': true,
+    'doses-page': true,
+    consultations: true,
+    survey: true,
+    'message-templates': false,
   },
   [UserRole.NURSE]: {
     dashboard: true,
@@ -68,6 +91,12 @@ const DEFAULT_PERMISSIONS: Record<UserRole, Record<string, boolean>> = {
     cashregister: false,
     diagnoses: false,
     protocols: false,
+    // Nurse focuses on aplicação/pesquisa, not document admin
+    'consent-terms': false,
+    'doses-page': true,
+    consultations: false,
+    survey: true,
+    'message-templates': false,
   },
 };
 
