@@ -1,6 +1,45 @@
 import { Request, Response, NextFunction } from 'express';
 import prisma from '../utils/prisma.js';
 import { sendSuccess, sendCreated } from '../utils/response.js';
+import { renderTemplate } from '../services/messageVariables.service.js';
+
+// Local helpers for inline variable rendering in upcoming-contacts (avoids per-contact DB calls).
+const MONTH_NAMES_PT = [
+  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro',
+];
+
+const firstName = (full?: string | null): string => {
+  if (!full) return '';
+  return full.trim().split(/\s+/)[0] || '';
+};
+
+const formatDateBR = (date: Date | string | null | undefined): string => {
+  if (!date) return '';
+  const d = typeof date === 'string' ? new Date(date) : date;
+  if (isNaN(d.getTime())) return '';
+  return d.toLocaleDateString('pt-BR', { timeZone: 'UTC' });
+};
+
+const formatConsultationPeriod = (
+  month?: number | null,
+  year?: number | null,
+  fortnight?: number | null,
+  fallbackDate?: Date | null,
+): string => {
+  if (month && year && fortnight) {
+    const idx = Math.max(1, Math.min(12, month)) - 1;
+    return `${MONTH_NAMES_PT[idx]}/${year} - ${fortnight === 1 ? '1ª Quinzena' : '2ª Quinzena'}`;
+  }
+  if (fallbackDate) {
+    const d = new Date(fallbackDate);
+    if (isNaN(d.getTime())) return '';
+    const idx = d.getUTCMonth();
+    const fn = d.getUTCDate() <= 15 ? '1ª Quinzena' : '2ª Quinzena';
+    return `${MONTH_NAMES_PT[idx]}/${d.getUTCFullYear()} - ${fn}`;
+  }
+  return '';
+};
 
 export const getStats = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -163,7 +202,8 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
     const futureLimit = new Date(today);
     futureLimit.setDate(futureLimit.getDate() + daysAhead);
 
-    // Get active treatments with protocols, milestones, and applied doses (for Dose 1 / last dose detection)
+    // Get active treatments with protocols, milestones, and applied doses (for Dose 1 / last dose detection).
+    // March 2026: nextConsultationMonth/Year/Fortnight + protocol.frequencyDays needed for variable rendering.
     const treatments = await prisma.treatment.findMany({
       where: {
         status: 'ONGOING',
@@ -221,6 +261,33 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
         (isOnDose1 && treatment.protocol.dose1MessageEnabled === false) ||
         (isOnLastDose && treatment.protocol.lastDoseMessageEnabled === false);
 
+      // March 2026: build the variable map ONCE per treatment so all milestones / extras
+      // get auto-filled with patient/guardian/doctor data when shown in the dashboard popup.
+      // Determine the next pending dose for {data_proxima_dose}.
+      const firstPendingDose = (treatment.doses || []).find((d: any) => d.status === 'PENDING');
+      const nextDoseDate: Date | null = firstPendingDose
+        ? new Date(firstPendingDose.applicationDate)
+        : (lastAppliedDose
+            ? (() => {
+                const d = new Date(lastAppliedDose.applicationDate);
+                d.setDate(d.getDate() + (treatment.protocol?.frequencyDays || 28));
+                return d;
+              })()
+            : null);
+
+      const treatmentVars: Record<string, string> = {
+        '{nome_responsavel}':      firstName(treatment.patient.guardian?.fullName),
+        '{nome_paciente}':         firstName(treatment.patient.fullName),
+        '{nome_medico}':           treatment.doctor?.name || '',
+        '{data_proxima_dose}':     formatDateBR(nextDoseDate),
+        '{data_proxima_consulta}': formatConsultationPeriod(
+          treatment.nextConsultationMonth,
+          treatment.nextConsultationYear,
+          treatment.nextConsultationFortnight,
+          treatment.nextConsultationDate,
+        ),
+      };
+
       if (!skipDefault) {
         treatment.protocol.milestones.forEach((milestone: any) => {
           const contactDate = new Date(referenceDate);
@@ -238,7 +305,9 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
               guardianName: treatment.patient.guardian?.fullName,
               doctorName: treatment.doctor?.name,
               contactDate,
-              message: milestone.message,
+              // March 2026: render variables so the dashboard popup shows resolved text.
+              message: renderTemplate(milestone.message, treatmentVars),
+              messageRaw: milestone.message,
               protocolName: treatment.protocol.name,
             });
           }
@@ -264,7 +333,8 @@ export const getUpcomingContacts = async (req: Request, res: Response, next: Nex
             guardianName: treatment.patient.guardian?.fullName,
             doctorName: treatment.doctor?.name,
             contactDate,
-            message,
+            message: renderTemplate(message, treatmentVars),
+            messageRaw: message,
             protocolName: treatment.protocol.name,
             isExtra: true,
             extraType: suffix,
